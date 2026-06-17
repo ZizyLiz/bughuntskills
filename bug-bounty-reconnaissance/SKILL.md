@@ -849,6 +849,7 @@ Date: {date}
 - [x] JavaScript analysis (LinkFinder + SecretFinder)
 - [x] GraphQL detection and introspection testing
 - [x] API schema discovery
+- [x] Business logic surface mapping (multi-step flows, client-side secrets)
 - [x] Cloud asset enumeration (S3, GCS, GitHub)
 - [x] OAuth/SAML endpoint mapping
 ```
