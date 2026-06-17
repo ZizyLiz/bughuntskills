@@ -49,7 +49,14 @@ tags:
   - sleep-based-fingerprint
   - xml-endpoint-mapping
   - cloud-metadata-detection
-version: "3.0"
+  - asn-cidr-correlation
+  - reverse-whois
+  - subdomain-permutation
+  - s3-bucket-discovery
+  - github-recon
+  - ip-range-scanning
+  - google-dork-library
+version: "3.1"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -114,6 +121,24 @@ admin.example.com
 EOF
 
 # Separate wildcard from specific targets
+
+# GOOGLE DORK QUICK REFERENCE (use during scope mapping)
+# site:target.com                                — all indexed pages
+# site:target.com inurl:login                    — login pages
+# site:target.com inurl:register                 — registration pages
+# site:target.com filetype:php                   — PHP pages (reveals tech stack)
+# site:target.com filetype:aspx                  — ASPX pages
+# site:target.com filetype:txt                   — .txt files (robots, config leaks)
+# site:target.com intext:"index of /"            — directory listings
+# site:target.com inurl:.php?id=                 — PHP GET parameters
+# site:target.com intitle:"admin"                — admin panels in title
+# site:target.com ext:log                        — log files (credentials in logs)
+# site:github.com "target.com" password          — GitHub credential leaks
+# site:trello.com "target.com"                   — Trello boards with internal info
+# site:pastebin.com "target.com"                 — Pastebin dumps
+# site:amazonaws.com inurl:target                — S3 buckets
+# "Copyright 2024 Target Inc"                    — find sister domains by copyright text
+```
 grep '^\*\.' recon/scope.txt | sed 's/^\*\.//' > recon/wildcard_domains.txt
 grep -v '^\*\.\|^$\|^#' recon/scope.txt | grep -v '^$' > recon/specific_targets.txt
 ```
@@ -181,6 +206,60 @@ cat all_passive_subs.txt puredns_bruteforce.txt \
 # Scope filtering
 cat all_subdomains.txt | grep -E "$(cat wildcard_domains.txt specific_targets.txt | \
   sed 's/\./\\./g' | paste -sd '|')" > inscope_subdomains.txt
+```
+
+### Horizontal Asset Correlation — ASN, CIDR, Reverse Whois
+
+**Critical for expanding scope. Companies often own multiple domains, CIDR ranges, and sibling assets that aren't in the initial scope list. Finding these widens your attack surface significantly.**
+
+```bash
+# ASN Discovery via Amass
+amass intel -org "Company Name" -o recon/asn_discovery.txt
+# Returns ASN numbers owned by the organization
+
+# CIDR ranges from ASN
+whois -h whois.radb.net -- '-i origin AS12345' | grep -Eo "([0-9.]+){4}/[0-9]+" | sort -u > recon/cidr_ranges.txt
+
+# Domains on ASN (reverse IP)
+amass intel -asn AS12345 -o recon/asn_domains.txt
+
+# Domains on CIDR range
+amass intel -cidr 192.0.2.0/24 -o recon/cidr_domains.txt
+
+# Reverse Whois — find domains registered by same email/org
+amass intel -whois -d example.com -o recon/reverse_whois.txt
+
+# Reverse DNS — correlate domains via shared NS/MX/A records
+# If domains share the same name server or mail server, they're likely same owner
+dig +short NS example.com | while read ns; do
+  curl -sk "https://domaineye.com/reverse-ns/$ns" 2>/dev/null | grep -oP '[a-z0-9-]+\.[a-z]+' >> recon/reverse_ns_domains.txt
+done
+
+# Copyright text correlation — unique footer text links sister domains
+# Search: intext:"© 2024 Target Inc. All rights reserved."
+# Any domain containing that exact copyright string is likely same org
+```
+
+### Subdomain Permutation Engine
+
+```bash
+# Generate permutations from discovered subdomains
+# Input: dev.example.com, api.example.com
+# With words: dev, staging, prod, admin, internal, test
+# Output: dev-api.example.com, staging-api.example.com, prod-admin.example.com, etc.
+
+echo -e "dev\nstaging\nprod\nadmin\ninternal\ntest\napi\napp\nwww\nportal\nvpn\nmail\nremote" > recon/perm_words.txt
+
+# Altdns — classic permutation tool
+altdns -i inscope_subdomains.txt -o recon/permutations.txt -w recon/perm_words.txt -r -s recon/permutations_resolved.txt
+
+# Gotator — modern, faster
+gotator -sub inscope_subdomains.txt -perm recon/perm_words.txt -depth 2 -prefixes -md -o recon/gotator_perms.txt
+puredns resolve recon/gotator_perms.txt -r ~/wordlists/resolvers/trusted-resolvers.txt -w recon/perms_live.txt
+
+# Subdomain-of-subdomain chaining
+# dev.example.com discovered → brute force *.dev.example.com
+subfinder -d dev.example.com -o recon/sub_of_sub.txt
 ```
 
 ### Step 4: DNS Resolution and CDN/Origin Discovery
@@ -472,6 +551,15 @@ for domain in $(cat wildcard_domains.txt); do
   base=$(echo $domain | cut -d'.' -f1)
   curl -sk "https://storage.googleapis.com/${base}-prod" 2>/dev/null | head -5
 done > gcs_buckets.txt 2>/dev/null
+
+# S3 Bucket Google Dork (find exposed buckets belonging to target)
+# site:s3.amazonaws.com "target"
+# site:amazonaws.com inurl:target
+# site:storage.googleapis.com "target"
+
+# If bucket is found writable, full takeover possible:
+aws s3 ls s3://bucket-name --no-sign-request
+aws s3 cp exploit.html s3://bucket-name/ --acl public-read
 ```
 
 ### Step 11: Source Code and Credential Leak Discovery
@@ -533,6 +621,51 @@ glab search code --query "${domain_short}" 2>/dev/null >> gitlab_leaks.txt
 
 # Check for exposed .git directories (source code disclosure)
 cat live_urls.txt | httpx -path "/.git/HEAD,/.git/config" -mc 200 -o git_exposure.txt
+
+# GitHub Dork Patterns (manual — often more effective than API)
+# "target.com" password                     → plaintext credentials
+# "target.com" api_key                      → API keys
+# "target.com" AWS_ACCESS_KEY_ID            → AWS credentials
+# "target.com" secret                       → generic secrets
+# "target.com" .env                         → .env files with all secrets
+# "dev.target.com"                          → developer repos
+# "api.target.com"                          → API endpoint references
+# "target.com" jdbc:                        → database connection strings
+# "target.com" mongodb://                   → MongoDB URIs with credentials
+# "target.com" redis://                     → Redis URIs
+# "target.com" ftp://                       → FTP credentials
+
+# Automated GitHub secret scanning tools
+trufflehog git https://github.com/target/repo --json > recon/trufflehog_findings.json
+gitleaks detect -s https://github.com/target/repo -f json -r recon/gitleaks_report.json
+```
+
+### IP Range Scanning and Infrastructure Discovery
+
+**Recon like a Boss technique: scanning a company's entire IP range for exposed services. One researcher found phpinfo.php across Yahoo's 260,000 IP range. Massive scale, automation required.**
+
+```bash
+# 1. Get IP ranges from whois
+whois -h whois.arin.net "n Target Corp" | grep -Eo "([0-9.]+){4}/[0-9]+" | sort -u > recon/ip_ranges.txt
+
+# 2. Convert CIDR to IP list for targeted scanning
+nmap -sL -n 192.0.2.0/24 | grep 'Nmap scan' | awk '{print $NF}' > recon/target_ips.txt
+
+# 3. Fast scan for common web ports across entire range
+# Pattern: look for phpinfo, phpmyadmin, backup files, exposed configs
+cat recon/ip_ranges.txt | naabu -p 80,443,8080,8443,8000,8888 -o recon/live_ips.txt
+
+# 4. HTTP probe with path discovery
+cat recon/live_ips.txt | httpx -path "/phpinfo.php,/info.php,/php_info.php,/test.php,/backup/,.env,/admin/" \
+  -mc 200 -o recon/ip_endpoints.txt
+
+# 5. High-value file hunt across IPs (automated)
+while read ip; do
+  for path in "phpinfo.php" ".env" "backup.zip" "wp-config.php.bak" ".git/HEAD"; do
+    code=$(curl -sk -o /dev/null -w "%{http_code}" -m 5 "http://$ip/$path" 2>/dev/null)
+    [ "$code" = "200" ] && echo "FOUND: http://$ip/$path" >> recon/ip_hits.txt
+  done
+done < recon/live_ips.txt
 ```
 
 ### Step 12: OAuth/SAML/SSO Endpoint Mapping
