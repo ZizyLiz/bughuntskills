@@ -8,7 +8,9 @@ description: >-
   GraphQL detection, cloud asset discovery, and source code leak hunting. Based on
   patterns from 10,000+ disclosed HackerOne reports where information disclosure
   (907 reports) and access control issues (519 reports) are the highest-volume
-  categories — reconnaissance quality directly drives bounty impact.
+  categories — reconnaissance quality directly drives bounty impact. Now covers
+  robots.txt/sitemap.xml discovery, forced browsing of sensitive paths, and
+  unprotected admin panel detection.
 domain: cybersecurity
 subdomain: web-application-security
 tags:
@@ -56,7 +58,13 @@ tags:
   - github-recon
   - ip-range-scanning
   - google-dork-library
-version: "3.1"
+  - robots-txt-discovery
+  - sitemap-discovery
+  - forced-browsing
+  - sensitive-path-discovery
+  - unprotected-admin
+  - information-disclosure
+version: "3.2"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -687,7 +695,78 @@ cat live_urls.txt | httpx -path \
   -mc 200 -o oauth_metadata_endpoints.txt
 ```
 
-### Step 13: Asset Inventory and Prioritization
+### Step 13: Robots.txt, Sitemap, and Sensitive Disclosure File Discovery
+
+**Hundreds of HackerOne access control reports ($35K GitLab, $20K Valve, $10K GitHub) trace back to robots.txt-disclosed admin panels, sitemap leaks, and forced browsing of unprotected endpoints. This is the single highest-ROI recon step.**
+
+```bash
+# Fetch robots.txt from every live host
+mkdir -p recon/sensitive_disclosure
+while IFS= read -r url; do
+  domain=$(echo "$url" | sed 's|https\?://||')
+  robots=$(curl -sk -m 5 "$url/robots.txt" 2>/dev/null)
+  if echo "$robots" | grep -qi "disallow"; then
+    echo "=== $url/robots.txt ===" >> recon/sensitive_disclosure/robots_txt_all.txt
+    echo "$robots" >> recon/sensitive_disclosure/robots_txt_all.txt
+    # Extract Disallow paths for forced browsing
+    echo "$robots" | grep -i "disallow:" | awk '{print $2}' | while read path; do
+      echo "$url$path" >> recon/sensitive_disclosure/robots_disclosed_paths.txt
+    done
+  fi
+done < live_urls.txt
+
+# Fetch sitemap.xml from every live host
+while IFS= read -r url; do
+  for sitemap_path in "/sitemap.xml" "/sitemap_index.xml" "/sitemap" "/sitemap.txt"; do
+    code=$(curl -sk -o /dev/null -w "%{http_code}" -m 5 "$url$sitemap_path" 2>/dev/null)
+    if [ "$code" = "200" ]; then
+      echo "[SITEMAP] $url$sitemap_path" >> recon/sensitive_disclosure/sitemaps_found.txt
+      curl -sk "$url$sitemap_path" 2>/dev/null | grep -oP 'https?://[^<>\"]+' >> recon/sensitive_disclosure/sitemap_urls.txt
+    fi
+  done
+done < live_urls.txt
+
+# Check standard sensitive paths — high hit rate in bug bounty
+while IFS= read -r url; do
+  for path in \
+    "/.well-known/security.txt" \
+    "/.well-known/change-password" \
+    "/admin" "/administrator" "/admin-panel" "/administrator-panel" \
+    "/panel" "/console" "/dashboard" "/manage" "/management" \
+    "/backup" "/backups" "/db" "/database" "/dump" \
+    "/debug" "/dev" "/staging" "/test" "/qa" \
+    "/api/admin" "/api/internal" "/api/debug" \
+    "/phpmyadmin" "/phpinfo.php" "/info.php" \
+    "/status" "/server-status" "/actuator" "/metrics" \
+    "/swagger" "/swagger-ui.html" "/api-docs" "/openapi.json" \
+    "/.env" "/.git/config" "/.svn/entries" "/.DS_Store" \
+    "/config" "/configuration" "/settings" "/setup" \
+    "/wp-admin" "/wp-login.php" "/user/login"; do
+    code=$(curl -sk -o /dev/null -w "%{http_code}" -m 5 "$url$path" 2>/dev/null)
+    if [ "$code" = "200" -o "$code" = "302" -o "$code" = "301" -o "$code" = "403" ]; then
+      echo "[$code] $url$path" >> recon/sensitive_disclosure/interesting_paths.txt
+    fi
+  done
+done < live_urls.txt
+
+# Highlight high-value hits
+echo "=== High-Value Paths Found ===" > recon/sensitive_disclosure/high_value_hits.txt
+grep -E "admin|administrator|panel|console|dashboard|debug" recon/sensitive_disclosure/interesting_paths.txt | \
+  grep -v "403" >> recon/sensitive_disclosure/high_value_hits.txt
+grep -E "\[200\].*admin|\[302\].*admin" recon/sensitive_disclosure/interesting_paths.txt | \
+  tee -a recon/sensitive_disclosure/high_value_hits.txt
+
+# robots.txt disclosed paths — immediate priority testing
+echo "=== robots.txt Disclosed Paths (immediate forced browsing targets) ===" >> recon/sensitive_disclosure/high_value_hits.txt
+cat recon/sensitive_disclosure/robots_disclosed_paths.txt 2>/dev/null >> recon/sensitive_disclosure/high_value_hits.txt
+
+echo "[+] Robots.txt files found: $(grep -c '===' recon/sensitive_disclosure/robots_txt_all.txt 2>/dev/null)"
+echo "[+] Sitemaps found: $(wc -l < recon/sensitive_disclosure/sitemaps_found.txt 2>/dev/null)"
+echo "[+] Interesting paths total: $(wc -l < recon/sensitive_disclosure/interesting_paths.txt 2>/dev/null)"
+echo "[+] Unprotected admin panels (200): $(grep -cE '\[200\].*admin' recon/sensitive_disclosure/interesting_paths.txt 2>/dev/null)"
+```
+
+### Step 14: Asset Inventory and Prioritization
 
 Build the final inventory prioritizing by exploitability and bounty potential:
 

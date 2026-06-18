@@ -17,13 +17,13 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 
 ## Skill Reference
 
-### 1. bug-bounty-reconnaissance (v3.1, 855 lines)
+### 1. bug-bounty-reconnaissance (v3.2, 900+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | First skill in any hunt. Triggered by subdomain discovery, DNS enumeration, JS analysis, GitHub scanning, cloud asset discovery |
-| **Trigger keywords** | recon, reconnaissance, subdomain, dns, enumerate, crawl, wayback, github, s3 bucket, certificate transparency, js analysis, google dork, asn, cidr, whois |
-| **What it produces** | `all_subdomains.txt`, `live_urls.txt`, `js_endpoints.txt`, `s3_buckets.txt`, `github_leaks.txt`, `api_endpoints.txt` |
+| **When it fires** | First skill in any hunt. Triggered by subdomain discovery, DNS enumeration, JS analysis, GitHub scanning, cloud asset discovery, robots.txt discovery, sitemap parsing |
+| **Trigger keywords** | recon, reconnaissance, subdomain, dns, enumerate, crawl, wayback, github, s3 bucket, certificate transparency, js analysis, google dork, asn, cidr, whois, robots.txt, sitemap, forced browse, admin panel discovery |
+| **What it produces** | `all_subdomains.txt`, `live_urls.txt`, `js_endpoints.txt`, `s3_buckets.txt`, `github_leaks.txt`, `api_endpoints.txt`, `robots_disclosed_paths.txt`, `high_value_hits.txt` |
 | **Next step** | Feed output to `bug-bounty-vulnerability-assessment` |
 
 **Use when**:
@@ -31,14 +31,15 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - Expanding scope: "find all subdomains and sibling assets of example.com"
 - Finding secrets: "search GitHub for target credentials"
 - Cloud discovery: "find S3 buckets belonging to target"
+- Admin panel hunts: "check robots.txt and sitemap.xml for hidden panels"
 
-### 2. bug-bounty-vulnerability-assessment (v3.1, 987 lines)
+### 2. bug-bounty-vulnerability-assessment (v3.3, 1057+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | After recon produces live URLs. Activates for vulnerability detection, testing methodology, filter analysis, WAF detection |
-| **Trigger keywords** | vulnerability, assessment, testing, find, detect, filter, waf, security level, bypass detection, sql injection, idor, xss, ssrf, business logic |
-| **What it produces** | Prioritized vulnerability list, WAF fingerprint, filter bypass strategy, security level progression map |
+| **When it fires** | After recon produces live URLs. Activates for vulnerability detection, testing methodology, filter analysis, WAF detection, forced browsing, admin panel discovery |
+| **Trigger keywords** | vulnerability, assessment, testing, find, detect, filter, waf, security level, bypass detection, sql injection, idor, xss, ssrf, business logic, forced browse, admin panel, robots.txt, unprotected admin |
+| **What it produces** | Prioritized vulnerability list, WAF fingerprint, filter bypass strategy, security level progression map, forced browsing admin hits, robots.txt bypass verification |
 | **Next step** | Hand confirmed vulnerabilities to `bug-bounty-exploitation` |
 
 **Use when**:
@@ -47,14 +48,16 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "assess the SQL injection surface"
 - "detect the WAF and find bypasses"
 - "check security level progression"
+- "find unprotected admin panels via forced browsing"
+- "test robots.txt disallowed paths for access"
 
-### 3. bug-bounty-exploitation (v3.3, 2061 lines)
+### 3. bug-bounty-exploitation (v3.6, 2200+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | After a vulnerability is confirmed. The largest skill — covers every exploitation technique from UNION SQLi to XSS polyglots to business logic |
-| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE |
-| **What it produces** | Working exploit payloads, extracted data, admin credentials, impact evidence |
+| **When it fires** | After a vulnerability is confirmed. The largest skill — covers every exploitation technique from UNION SQLi to XSS polyglots to business logic to unprotected admin exploitation |
+| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE, admin panel, delete user, forced browse, robots bypass |
+| **What it produces** | Working exploit payloads, extracted data, admin credentials, impact evidence, admin panel access, user deletion PoC |
 | **Next step** | Pass credentials/impact data to `bug-bounty-reporting` |
 
 **Use when**:
@@ -63,8 +66,11 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "get the password via blind SQLi"
 - "bypass this WAF filter"
 - "find the XSS payload that works"
+- "access the admin panel from robots.txt"
+- "delete the target user via unprotected admin"
 
 **Key sections (largest skill)**:
+- Unprotected Admin Exploitation: robots.txt → admin panel → delete user (NEW in v3.6)
 - SQL Injection: UNION, blind boolean, time-based, conditional error, CAST leak, Oracle enumeration
 - XSS: 80+ event handlers, consuming tags, restricted char bypasses, framework XSS, prototype pollution, polyglots
 - SSRF: cloud metadata, Kubernetes pivoting, IP bypass library
@@ -150,10 +156,10 @@ User: "solve this PortSwigger lab using bughuntskills"
 
 | Skill | Lines | Focus |
 |-------|-------|-------|
-| Exploitation | 2061 | Deepest — every PoC technique with payloads |
-| Vulnerability Assessment | 987 | Detection patterns, filter analysis, WAF bypass |
-| Reconnaissance | 855 | Full discovery pipeline |
-| Reporting | 800 | Templates, CVSS, CWE, platform checklists |
+| Exploitation | 2200+ | Deepest — every PoC technique with payloads, now + unprotected admin |
+| Vulnerability Assessment | 1057+ | Detection patterns, filter analysis, WAF bypass, forced browsing discovery |
+| Reconnaissance | 900+ | Full discovery pipeline, robots.txt/sitemap parsing |
+| Reporting | 963 | Templates, CVSS, CWE, platform checklists |
 | XXE | 285 | XML-specific exploitation |
 | SSRF | 225 | Cloud/internal service pivoting |
 
@@ -177,4 +183,4 @@ JWT/OAuth/IDOR attack?           → bug-bounty-exploitation
 
 ---
 
-*Last updated: 2026-06-17 — bughuntskills v3.3*
+*Last updated: 2026-06-18 — bughuntskills v3.6*
