@@ -951,6 +951,210 @@ The XML parser decodes `&#x55;&#x4e;&#x49;&#x4f;&#x4e;` to `UNION` AFTER the WAF
 3. Implement defense-in-depth: WAF + prepared statements
 ```
 
+### Step 4: Automated Report File Generation
+
+**CRITICAL: After every assessment or exploitation session, run this script to generate physical report files. The skills produce findings; this step produces deliverable files.**
+
+```bash
+#!/bin/bash
+# save as: ~/bugbounty/{program_name}/generate_report.sh
+# Run after assessment/exploitation phases
+
+PROGRAM="${1:-unknown_program}"
+REPORT_DIR="${2:-.}"
+DATE=$(date +%Y-%m-%d)
+TIME=$(date +%H%M)
+
+mkdir -p "${REPORT_DIR}/reports/${DATE}"
+cd "${REPORT_DIR}" || exit 1
+
+# === 1. EXECUTIVE SUMMARY ===
+cat > "reports/${DATE}/EXECUTIVE_SUMMARY_${PROGRAM}_${TIME}.md" << 'SUMMARY'
+# Bug Bounty Engagement Executive Summary
+**Program**: {PROGRAM}
+**Date**: {DATE}
+**Researcher**: {RESEARCHER}
+
+## Engagement Statistics
+| Metric | Value |
+|--------|-------|
+| Endpoints Tested | {TOTAL_ENDPOINTS} |
+| Findings Identified | {TOTAL_FINDINGS} |
+| Critical | {CRITICAL_COUNT} |
+| High | {HIGH_COUNT} |
+| Medium | {MEDIUM_COUNT} |
+| Low | {LOW_COUNT} |
+
+## Most Critical Finding
+{FIRST_CRITICAL_TITLE} (CVSS {FIRST_CRITICAL_CVSS})
+{FIRST_CRITICAL_DESCRIPTION}
+
+## Complete Finding Inventory
+{INSERT findings_inventory.md content here}
+
+## Scope Summary
+{INSERT scope.txt content here}
+SUMMARY
+
+# === 2. PER-FINDING REPORTS ===
+# For each finding, generate individual report file
+cat > "reports/${DATE}/FINDING_BB-001_${TIME}.md" << 'FINDING'
+# FINDING BB-001: {TITLE}
+**Severity**: {SEVERITY} | **CVSS**: {SCORE} | **CWE**: {CWE}
+**Affected URL**: {URL}
+**Auth Required**: {AUTH}
+
+## Summary
+{DESCRIPTION}
+
+## Proof of Concept
+### Step 1: {STEP1_TITLE}
+```http
+{STEP1_REQUEST}
+```
+→ {STEP1_RESPONSE}
+
+### Step 2: {STEP2_TITLE}
+```http
+{STEP2_REQUEST}
+```
+→ {STEP2_RESPONSE}
+
+## Impact
+{DATA_EXPOSED}
+- Records Affected: {COUNT}
+- Business Risk: {RISK}
+
+## Remediation
+{REMEDIATION_STEPS}
+
+## Evidence
+- PoC request/response saved to: evidence/BB-001_*.txt
+- Screenshots saved to: evidence/BB-001_*.png
+FINDING
+
+# === 3. EVIDENCE INVENTORY ===
+cat > "reports/${DATE}/EVIDENCE_INVENTORY_${TIME}.md" << 'EVIDENCE'
+# Evidence Inventory — {PROGRAM}
+| Finding ID | Type | File | Description |
+|-----------|------|------|-------------|
+{INSERT evidence paths per finding}
+EVIDENCE
+
+# === 4. SUBMISSION TRACKER ===
+cat > "reports/${DATE}/SUBMISSION_TRACKER_${TIME}.csv" << 'TRACKER'
+Report ID,Title,Severity,CVSS,Platform,Submission Date,Submission ID,Status,Bounty,Notes
+{INSERT tracking rows}
+TRACKER
+
+echo "[+] Reports generated in reports/${DATE}/"
+echo "    - EXECUTIVE_SUMMARY_${PROGRAM}_${TIME}.md"
+echo "    - FINDING_BB-*_${TIME}.md (one per finding)"
+echo "    - EVIDENCE_INVENTORY_${TIME}.md"
+echo "    - SUBMISSION_TRACKER_${TIME}.csv"
+```
+
+### Python Automated Report Generator
+
+```python
+#!/usr/bin/env python3
+"""Auto-generate bug bounty report files from findings inventory."""
+
+import json, os, datetime
+
+def generate_reports(program_name, findings_file, output_dir="./reports"):
+    """Generate all report files from a findings JSON inventory."""
+    
+    date = datetime.datetime.now().strftime("%Y-%m-%d")
+    time = datetime.datetime.now().strftime("%H%M")
+    out = f"{output_dir}/{date}"
+    os.makedirs(out, exist_ok=True)
+    
+    # Load findings
+    with open(findings_file) as f:
+        findings = json.load(f)
+    
+    findings_list = findings.get("findings", [])
+    stats = findings.get("stats", {})
+    
+    # 1. Executive Summary
+    critical = [f for f in findings_list if f.get("severity") == "Critical"]
+    high = [f for f in findings_list if f.get("severity") == "High"]
+    
+    with open(f"{out}/EXECUTIVE_SUMMARY_{program_name}_{time}.md", "w") as f:
+        f.write(f"# Bug Bounty Engagement — {program_name}\n")
+        f.write(f"**Date**: {date}\n\n")
+        f.write("## Engagement Statistics\n")
+        f.write(f"| Metric | Value |\n")
+        f.write(f"|--------|-------|\n")
+        f.write(f"| Endpoints Tested | {stats.get('endpoints_tested', 'N/A')} |\n")
+        f.write(f"| Findings | {len(findings_list)} |\n")
+        f.write(f"| Critical | {len(critical)} |\n")
+        f.write(f"| High | {len(high)} |\n\n")
+        
+        if critical:
+            f.write("## Most Critical Finding\n")
+            f.write(f"**{critical[0]['title']}** (CVSS {critical[0].get('cvss', 'N/A')})\n\n")
+            f.write(f"{critical[0].get('description', '')}\n\n")
+        
+        f.write("## Finding Inventory\n")
+        f.write("| ID | Title | Severity | CVSS |\n")
+        f.write("|---|-------|----------|------|\n")
+        for finding in findings_list:
+            f.write(f"| {finding['id']} | {finding['title']} | {finding['severity']} | {finding.get('cvss', 'N/A')} |\n")
+    
+    # 2. Individual Finding Reports
+    for finding in findings_list:
+        fid = finding['id']
+        with open(f"{out}/FINDING_{fid}_{time}.md", "w") as f:
+            f.write(f"# {fid}: {finding['title']}\n\n")
+            f.write(f"**Severity**: {finding['severity']} | **CVSS**: {finding.get('cvss', 'N/A')} | **CWE**: {finding.get('cwe', 'N/A')}\n\n")
+            f.write(f"**Affected URL**: {finding.get('url', 'N/A')}\n\n")
+            f.write(f"## Summary\n{finding.get('description', '')}\n\n")
+            
+            f.write("## Proof of Concept\n")
+            for i, step in enumerate(finding.get('poc_steps', []), 1):
+                f.write(f"### Step {i}\n```http\n{step.get('request', '')}\n```\n")
+                f.write(f"→ {step.get('response', '')}\n\n")
+            
+            f.write("## Impact\n")
+            for impact in finding.get('impacts', []):
+                f.write(f"- {impact}\n")
+            
+            f.write(f"\n## Remediation\n{finding.get('remediation', '')}\n")
+            
+            if finding.get('evidence'):
+                f.write("\n## Evidence\n")
+                for ev in finding['evidence']:
+                    f.write(f"- {ev}\n")
+    
+    # 3. Submission Tracker
+    with open(f"{out}/SUBMISSION_TRACKER_{time}.csv", "w") as f:
+        f.write("ID,Title,Severity,CVSS,Platform,Date,Status,Bounty,Notes\n")
+        for finding in findings_list:
+            f.write(f"{finding['id']},{finding['title']},{finding['severity']},{finding.get('cvss', '')},,,Draft,,\n")
+    
+    print(f"Generated in {out}:")
+    print(f"  EXECUTIVE_SUMMARY_{program_name}_{time}.md")
+    for finding in findings_list:
+        print(f"  FINDING_{finding['id']}_{time}.md")
+    print(f"  SUBMISSION_TRACKER_{time}.csv")
+
+# Usage:
+# findings_data = {
+#     "stats": {"endpoints_tested": 150},
+#     "findings": [
+#         {
+#             "id": "BB-001", "title": "...", "severity": "Critical", "cvss": "9.8",
+#             "cwe": "CWE-918", "url": "https://...", "description": "...",
+#             "poc_steps": [{"request": "...", "response": "..."}],
+#             "impacts": ["..."], "remediation": "...", "evidence": ["..."]
+#         }
+#     ]
+# }
+# generate_reports("shijicloud", "findings.json")
+```
+
 ### Encoding Bypass Bounty Reference
 
 | Encoding Type | Filter Bypassed | Bounty Impact | Real Example |

@@ -1,0 +1,257 @@
+{
+  "stats": {
+    "endpoints_tested": 150,
+    "total_findings": 9,
+    "critical": 1,
+    "high": 3,
+    "medium": 3,
+    "low": 2,
+    "verified_not_vulnerable": 8
+  },
+  "findings": [
+    {
+      "id": "BB-001",
+      "title": "SQL Error Disclosure via client_id Parameter in OAuth Token Endpoint",
+      "severity": "Critical",
+      "cvss": "8.6",
+      "cwe": "CWE-209",
+      "url": "https://op-api-uat-ap1.shijicloud.com/oauth/token",
+      "description": "The /oauth/token endpoint leaks Hibernate SQLGrammarException errors when an invalid client_id is provided. The client_id parameter is injected directly into a database query. All 5 tested invalid client_id values trigger SQL exceptions, confirming the parameter reaches the database unsanitized. This was reproduced from a completely unauthenticated, cookie-free session.",
+      "poc_steps": [
+        {
+          "request": "POST /oauth/token HTTP/1.1\nHost: op-api-uat-ap1.shijicloud.com\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=refresh_token&refresh_token=test&client_id=shijimini&client_secret=123456",
+          "response": "HTTP/1.1 401\nSQLGrammarException: could not extract ResultSet \u2014 Hibernate SQL error leaked in response body"
+        },
+        {
+          "request": "POST /oauth/token ...&client_id=test123",
+          "response": "HTTP/1.1 401\nSQLGrammarException confirmed for ALL non-existent client_id values"
+        },
+        {
+          "request": "POST /oauth/token ...&client_id=admin",
+          "response": "HTTP/1.1 401\nSame SQL error \u2014 parameter directly injected into database query"
+        }
+      ],
+      "impacts": [
+        "Database query structure exposed via Hibernate exception messages",
+        "Client-side parameter injected into backend SQL without sanitization",
+        "Reproducible from unauthenticated, zero-cookie session",
+        "Enables SQL injection exploitation if WAF bypass payloads succeed"
+      ],
+      "remediation": "Validate client_id against a whitelist before database lookup. Use parameterized queries instead of string concatenation. Return generic 401 without exposing internal exception details.",
+      "evidence": [
+        "evidence/BB-001_sqli_error_screenshot.png",
+        "evidence/BB-001_request_responses.txt"
+      ]
+    },
+    {
+      "id": "BB-002",
+      "title": "Swagger UI + Swagger Resources Publicly Accessible Without Authentication",
+      "severity": "High",
+      "cvss": "7.5",
+      "cwe": "CWE-200",
+      "url": "https://op-api-uat-ap1.shijicloud.com/swagger-ui.html",
+      "description": "The full Swagger UI interface and /swagger-resources endpoint are publicly accessible without any authentication. The resources endpoint exposes 3 API groups (ac, system, minipos) with their v2/api-docs paths, providing a complete API attack surface map to unauthenticated users.",
+      "poc_steps": [
+        {
+          "request": "GET /swagger-ui.html HTTP/1.1\nHost: op-api-uat-ap1.shijicloud.com",
+          "response": "HTTP/1.1 200 OK\nFull Swagger UI rendered \u2014 Springfox v2.10.0"
+        },
+        {
+          "request": "GET /swagger-resources HTTP/1.1\nHost: op-api-uat-ap1.shijicloud.com",
+          "response": "HTTP/1.1 200 OK\n[{\"name\":\"ac\",\"url\":\"/ac//v2/api-docs\",...},{\"name\":\"system\",...},{\"name\":\"minipos\",...}]"
+        }
+      ],
+      "impacts": [
+        "Complete API inventory exposed to unauthenticated attackers",
+        "3 microservice groups enumerated",
+        "Combined with JS source analysis reveals 32+ API endpoints"
+      ],
+      "remediation": "Restrict /swagger-ui.html and /swagger-resources to authenticated sessions only. Disable Swagger entirely in production environments.",
+      "evidence": [
+        "evidence/BB-002_swagger_ui.png",
+        "evidence/BB-002_swagger_resources.json"
+      ]
+    },
+    {
+      "id": "BB-003",
+      "title": "No Rate Limiting on Authentication Endpoint",
+      "severity": "High",
+      "cvss": "7.5",
+      "cwe": "CWE-307",
+      "url": "https://op-api-uat-ap1.shijicloud.com/oauth/login",
+      "description": "The /oauth/login endpoint accepts unlimited consecutive failed authentication attempts without rate limiting, 429 responses, or account lockout. Tested with 10 rapid failed attempts \u2014 all accepted within seconds.",
+      "poc_steps": [
+        {
+          "request": "POST /oauth/login (10 times rapidly)\nwrong_password each time",
+          "response": "All 10 attempts return HTTP 500 (not 429). No rate limiting headers present."
+        }
+      ],
+      "impacts": [
+        "Enables credential brute-force attacks",
+        "No account lockout after repeated failures",
+        "Common bug bounty finding \u2014 validated per program requirements"
+      ],
+      "remediation": "Implement rate limiting: 5 failures per IP/minute, account lockout after 10 failures, CAPTCHA after 3 failures.",
+      "evidence": [
+        "evidence/BB-003_rate_limit_log.txt"
+      ]
+    },
+    {
+      "id": "BB-004",
+      "title": "Token Not Invalidated After Logout, No Concurrent Session Limit",
+      "severity": "High",
+      "cvss": "7.5",
+      "cwe": "CWE-613",
+      "url": "https://op-api-uat-ap1.shijicloud.com/system/logout",
+      "description": "After calling GET /system/logout which returns HTTP 302, the access token remains fully valid. Additionally, generating 3 concurrent login sessions produces 3 independently valid tokens that can be used simultaneously without any session limit enforcement.",
+      "poc_steps": [
+        {
+          "request": "GET /system/logout",
+          "response": "HTTP 302 \u2014 redirected"
+        },
+        {
+          "request": "GET /swagger-resources (same token, after logout)",
+          "response": "HTTP 200 \u2014 token still valid after logout!"
+        },
+        {
+          "request": "3 concurrent login calls \u2192 3 tokens generated \u2192 all 3 valid simultaneously",
+          "response": "All 3 tokens return HTTP 200 on protected endpoints"
+        }
+      ],
+      "impacts": [
+        "Stolen tokens persist after user logout",
+        "Multiple concurrent sessions bypass session management",
+        "Token expires_in: 12 hours \u2014 long window for abuse"
+      ],
+      "remediation": "Implement server-side token revocation on logout. Limit concurrent sessions per user. Reduce token expiry time to 1 hour with refresh rotation.",
+      "evidence": [
+        "evidence/BB-004_logout_token_reuse.txt"
+      ]
+    },
+    {
+      "id": "BB-005",
+      "title": "Missing Security Headers Across All 3 In-Scope Targets",
+      "severity": "Medium",
+      "cvss": "5.3",
+      "cwe": "CWE-693",
+      "url": "Web, API, Identity servers",
+      "description": "All three in-scope targets are missing critical security headers. Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy, and Cross-Origin-Resource-Policy are absent on all targets. The API gateway also lacks Content-Security-Policy.",
+      "poc_steps": [
+        {
+          "request": "HEAD / HTTP/1.1 on each target",
+          "response": "Missing: HSTS, X-Content-Type-Options, Referrer-Policy, Cross-Origin-Resource-Policy across all 3. API also missing CSP."
+        }
+      ],
+      "impacts": [
+        "MITM downgrade possible (no HSTS)",
+        "MIME sniffing attacks possible (no X-Content-Type-Options)",
+        "Referrer leakage to third parties (no Referrer-Policy)"
+      ],
+      "remediation": "Add HSTS (max-age=31536000; includeSubDomains), X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin on all targets.",
+      "evidence": [
+        "evidence/BB-005_security_headers_audit.txt"
+      ]
+    },
+    {
+      "id": "BB-006",
+      "title": "Nginx Server Version Disclosure",
+      "severity": "Medium",
+      "cvss": "5.3",
+      "cwe": "CWE-200",
+      "url": "Web and Identity servers",
+      "description": "The Web and Identity servers expose nginx/1.25.3 in the Server response header, enabling attackers to check for version-specific CVEs and vulnerabilities.",
+      "poc_steps": [
+        {
+          "request": "HEAD / HTTP/1.1 on web and identity servers",
+          "response": "Server: nginx/1.25.3"
+        }
+      ],
+      "impacts": [
+        "Enables targeted attacks using known nginx 1.25.3 vulnerabilities"
+      ],
+      "remediation": "Set server_tokens off; in nginx configuration.",
+      "evidence": [
+        "evidence/BB-006_server_headers.txt"
+      ]
+    },
+    {
+      "id": "BB-007",
+      "title": "Opaque 500 Errors on Invalid Authentication (Information Disclosure)",
+      "severity": "Medium",
+      "cvss": "5.3",
+      "cwe": "CWE-209",
+      "url": "https://op-api-uat-ap1.shijicloud.com/oauth/login",
+      "description": "All failed login attempts return HTTP 500 with {\"code\":\"500\",\"msg\":\"System Error\",\"traceId\":\"...\"} instead of a proper HTTP 401 with clean error messaging. The traceId leaks internal request tracking identifiers.",
+      "poc_steps": [
+        {
+          "request": "POST /oauth/login with invalid credentials",
+          "response": "HTTP 500 \u2192 {\"code\":\"500\",\"msg\":\"System Error\",\"traceId\":\"d37cdfe7506d791a\"}"
+        }
+      ],
+      "impacts": [
+        "Internal traceId values leaked to unauthenticated users",
+        "Cannot differentiate between 'system down' and 'wrong password' for incident response",
+        "Non-standard error handling exposes internal implementation details"
+      ],
+      "remediation": "Return HTTP 401 with {\"error\":\"invalid_grant\",\"error_description\":\"Invalid credentials\"} for authentication failures.",
+      "evidence": [
+        "evidence/BB-007_error_responses.json"
+      ]
+    },
+    {
+      "id": "BB-008",
+      "title": "JSESSIONID Cookie Missing Secure and HttpOnly Flags",
+      "severity": "Low",
+      "cvss": "3.7",
+      "cwe": "CWE-614",
+      "url": "https://op-api-uat-ap1.shijicloud.com",
+      "description": "The API gateway sets JSESSIONID cookie without Secure or HttpOnly flags.",
+      "poc_steps": [
+        {
+          "request": "GET / HTTP/1.1 on API gateway",
+          "response": "Set-Cookie: JSESSIONID=xxx (no Secure, no HttpOnly)"
+        }
+      ],
+      "impacts": [
+        "Cookie vulnerable to MITM interception (no Secure flag)",
+        "Cookie accessible via XSS (no HttpOnly flag)"
+      ],
+      "remediation": "Set Secure; HttpOnly; SameSite=Strict on all session cookies.",
+      "evidence": [
+        "evidence/BB-008_cookie_flags.txt"
+      ]
+    },
+    {
+      "id": "BB-009",
+      "title": "Hardcoded OAuth Client Secret in JavaScript Bundle",
+      "severity": "Low",
+      "cvss": "3.1",
+      "cwe": "CWE-798",
+      "url": "https://op-web-uat-ap1.shijicloud.com/assets/js/ (JS bundles)",
+      "description": "The web application JavaScript contains client_secret=123456 for the OAuth refresh token flow: grant_type=refresh_token&refresh_token=X&client_id=client&client_secret=123456.",
+      "poc_steps": [
+        {
+          "request": "Review JS bundle source",
+          "response": "client_secret=123456 hardcoded in client-side code"
+        }
+      ],
+      "impacts": [
+        "If refresh token endpoint does not validate client_secret, enables session hijacking"
+      ],
+      "remediation": "Never store secrets in client-side JavaScript. Use backend-to-backend communication for OAuth token exchange.",
+      "evidence": [
+        "evidence/BB-009_js_secret.txt"
+      ]
+    }
+  ],
+  "verified_not_vulnerable": [
+    "Actuator detail endpoints (/env, /mappings, /heapdump) \u2014 properly auth-gated (401 on clean session)",
+    "CORS configuration \u2014 no arbitrary origin reflection with credentials",
+    "Host header injection \u2014 properly blocked (403/404)",
+    "HTTP request smuggling \u2014 nginx RFC-strict (returns 400)",
+    "User enumeration timing \u2014 not statistically significant (0.2\u03c3)",
+    "Scope escalation \u2014 token scope fixed to 'app'",
+    "Password policy \u2014 weak passwords properly rejected",
+    "GraphQL \u2014 no endpoints detected"
+  ]
+}

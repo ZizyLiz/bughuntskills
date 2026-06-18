@@ -67,7 +67,8 @@ tags:
   - js-admin-url-extraction
   - client-side-source-analysis
   - unpredictable-admin-url
-version: "3.3"
+  - automated-output
+version: "3.4"
 author: mahipal
 license: Apache-2.0
 nist_csf:

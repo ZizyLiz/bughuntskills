@@ -1,0 +1,10 @@
+ID,Title,Severity,CVSS,Platform,Date,Status,Bounty,Notes
+BB-001,SQL Error Disclosure via client_id Parameter in OAuth Token ,Critical,8.6,,,Submitted,,
+BB-002,Swagger UI + Swagger Resources Publicly Accessible Without A,High,7.5,,,Submitted,,
+BB-003,No Rate Limiting on Authentication Endpoint,High,7.5,,,Submitted,,
+BB-004,Token Not Invalidated After Logout, No Concurrent Session Li,High,7.5,,,Submitted,,
+BB-005,Missing Security Headers Across All 3 In-Scope Targets,Medium,5.3,,,Submitted,,
+BB-006,Nginx Server Version Disclosure,Medium,5.3,,,Submitted,,
+BB-007,Opaque 500 Errors on Invalid Authentication (Information Dis,Medium,5.3,,,Submitted,,
+BB-008,JSESSIONID Cookie Missing Secure and HttpOnly Flags,Low,3.7,,,Submitted,,
+BB-009,Hardcoded OAuth Client Secret in JavaScript Bundle,Low,3.1,,,Submitted,,
