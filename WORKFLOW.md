@@ -13,6 +13,12 @@ Methodology → Reconnaissance → Vulnerability Assessment → Exploitation →
      ↑              ↑                  ↑                       ↑              ↑
   Mindset &     Discover           Identify               Prove impact    Document
   validation    attack surface     vuln class             with PoC        for bounty
+
+Each phase NOW produces its own deliverable report file:
+  Recon → RECON_REPORT.md (attack surface inventory)
+  Assessment → ASSESSMENT_REPORT.md (vulnerability list + coverage map)
+  Exploitation → EXPLOITATION_REPORT.md + findings.json (PoCs + evidence inventory)
+  Reporting → BB-XXX_REPORT.md per finding + EXECUTIVE_SUMMARY.md + SUBMISSION_TRACKER.csv
 ```
 
 ## Skill Reference

@@ -68,7 +68,7 @@ tags:
   - client-side-source-analysis
   - unpredictable-admin-url
   - automated-output
-version: "3.4"
+version: "3.5"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -974,4 +974,122 @@ Date: {date}
 - [x] Business logic surface mapping (multi-step flows, client-side secrets)
 - [x] Cloud asset enumeration (S3, GCS, GitHub)
 - [x] OAuth/SAML endpoint mapping
+```
+
+### Auto-Generate Reconnaissance Phase Report
+
+After completing reconnaissance, run this script to produce `reports/{date}/RECON_REPORT.md`:
+
+```python
+#!/usr/bin/env python3
+"""Generate reconnaissance phase report from output files."""
+
+import os, datetime, subprocess
+
+def generate_recon_report(program_name, recon_dir, output_dir="./reports"):
+    """Read recon output files and produce a structured recon report."""
+    
+    date = datetime.datetime.now().strftime("%Y-%m-%d")
+    out = f"{output_dir}/{date}"
+    os.makedirs(out, exist_ok=True)
+    
+    # Read all recon output files
+    def count_lines(filepath):
+        try:
+            with open(f"{recon_dir}/{filepath}") as f:
+                return sum(1 for _ in f)
+        except: return 0
+    
+    def read_file(filepath):
+        try:
+            with open(f"{recon_dir}/{filepath}") as f:
+                return f.read().strip()
+        except: return "N/A"
+    
+    # Gather stats
+    subs = count_lines("inscope_subdomains.txt")
+    live = count_lines("live_urls.txt")
+    urls = count_lines("unique_urls.txt")
+    params = count_lines("endpoints_with_params.txt")
+    js_files = count_lines("interesting_files.txt")
+    graphql = count_lines("graphql_endpoints.txt")
+    api_eps = count_lines("api_endpoints.txt")
+    robots = count_lines("sensitive_disclosure/robots_disclosed_paths.txt")
+    js_admins = count_lines("sensitive_disclosure/js_admin_urls.txt")
+    s3 = count_lines("s3_buckets.txt")
+    github = count_lines("github_leaks.txt")
+    
+    # Generate report
+    report = f"""# Reconnaissance Phase Report — {program_name}
+**Date**: {date}
+
+## Scope Summary
+| Metric | Count |
+|--------|-------|
+| In-Scope Subdomains | {subs} |
+| Live HTTP Hosts | {live} |
+| Unique URLs Discovered | {urls} |
+| Parameterized Endpoints | {params} |
+| JavaScript Files | {js_files} |
+| API Endpoints (from JS) | {api_eps} |
+| GraphQL Endpoints | {graphql} |
+| Robots.txt Disclosed Paths | {robots} |
+| JS-Disclosed Admin URLs | {js_admins} |
+| S3 Buckets Found | {s3} |
+| GitHub Leaks Found | {github} |
+
+## High-Priority Targets
+{read_file("sensitive_disclosure/high_value_hits.txt")[:3000]}
+
+## Discovery Methods Used
+- [x] Passive subdomain enumeration (SSL certificates, DNS databases, search engines)
+- [x] Active DNS brute-force with permutation scanning
+- [x] CDN/origin server identification and bypass testing
+- [x] Live host probing (HTTP/HTTPS on 11 common ports)
+- [x] Technology fingerprinting (Wappalyzer, WAF detection)
+- [x] URL crawling and historical discovery (Katana, GAU, waybackurls)
+- [x] JavaScript analysis for hidden endpoints and secrets
+- [x] GraphQL introspection and field suggestion testing
+- [x] Cloud asset enumeration (S3 buckets, GitHub code search)
+- [x] OAuth/SAML/SSO endpoint mapping
+- [x] robots.txt and sitemap.xml discovery
+- [x] JavaScript source code admin URL extraction
+
+## Next Phase
+Feed `live_urls.txt`, `endpoints_with_params.txt`, and `js_admin_urls.txt` to **bug-bounty-vulnerability-assessment**.
+"""
+
+    report_path = f"{out}/RECON_REPORT_{program_name}.md"
+    with open(report_path, "w") as f:
+        f.write(report)
+    
+    print(f"[+] Recon report generated: {report_path}")
+    return report_path
+
+# Usage:
+# generate_recon_report("shijicloud", "./recon", "./reports")
+```
+
+```bash
+# Bash one-liner for quick recon report
+cat > reports/$(date +%Y-%m-%d)/RECON_REPORT.md << 'RECONEOF'
+# Reconnaissance Report — {program_name}
+Date: $(date)
+
+## Stats
+- Subdomains: $(wc -l < recon/inscope_subdomains.txt)
+- Live hosts: $(wc -l < recon/live_urls.txt)  
+- URLs: $(wc -l < recon/unique_urls.txt)
+- JS files: $(wc -l < recon/interesting_files.txt)
+- Admin panels found: $(wc -l < recon/sensitive_disclosure/high_value_hits.txt)
+
+## Priority Targets
+$(cat recon/sensitive_disclosure/high_value_hits.txt | head -20)
+
+## Full Data Files
+- recon/inscope_subdomains.txt
+- recon/live_urls.txt
+- recon/unique_urls.txt
+- recon/endpoints_with_params.txt
+RECONEOF
 ```
