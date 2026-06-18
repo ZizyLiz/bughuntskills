@@ -1,7 +1,0 @@
-/&client_id=shijimini&response_type=code&login=true&scope=openid&socialLogin=sep-pkce-oidc
-/acNormalLogin
-/login
-/logout
-/questionnaireLogin
-/sepLogin
-/shijiEmailLogin

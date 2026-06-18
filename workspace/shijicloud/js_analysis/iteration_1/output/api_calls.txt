@@ -1,6 +1,0 @@
-${this.realmNameUrl}_local
-${this.realmNameUrl}_sep
-${this.realmNameUrl}_shijiEmail
-${this.realmNameUrl}_sis
-circulateLastDate
-circulateNumber
