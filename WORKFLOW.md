@@ -2,20 +2,46 @@
 
 ## Skill Architecture
 
-bughuntskills uses 6 standalone skills, each in its own folder with a `SKILL.md` file.
+bughuntskills uses 7 standalone skills, each in its own folder with a SKILL.md file.
 Skills auto-activate based on trigger keywords and domain matching. This guide explains
 when each skill fires and how they chain together in a complete bug bounty workflow.
 
 ## The Standard Pipeline
 
 ```
-Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
-     ↑                  ↑                       ↑              ↑
-  Discover           Identify               Prove impact    Document
-  attack surface     vuln class             with PoC        for bounty
+Methodology → Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
+     ↑              ↑                  ↑                       ↑              ↑
+  Mindset &     Discover           Identify               Prove impact    Document
+  validation    attack surface     vuln class             with PoC        for bounty
 ```
 
 ## Skill Reference
+
+### 0. bug-bounty-methodology (v1.0, 480+ lines) — NEW
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | Session start, target switch, feeling lost, before writing any report, or when validating findings |
+| **Trigger keywords** | methodology, mindset, validate, triage, 7-question, discipline, false positive, cvss, severity, never submit, always rejected, evidence hygiene, kill fast, retract, pre-severity |
+| **What it produces** | Engagement type confirmation, 7-Question Gate validation, CVSS scores, conditionally-valid chain table, never-submit list checks, evidence hygiene redactions |
+| **Next step** | Routes to recon, assessment, exploitation, or reporting based on phase |
+
+**Use when**:
+- Starting any session: "I'm hunting target.com"
+- Validating before writing a report: "Is this finding worth submitting?"
+- Feeling stuck: "What should I do next?"
+- Checking severity: "What CVSS is this IDOR?"
+- Verifying scope: "Is this in the program's accepted impact list?"
+
+**Key sections**:
+- 7-Question Gate (Q1-Q7 validation before any report)
+- 4 Discipline Rules (Marker Discipline, Body-Diff, Statistical-Sample, Shell-Loop Ban)
+- Never Submit List (22 invalid bug classes)
+- Conditionally Valid Chain Table (16 chains requiring connector gadgets)
+- CVSS 3.1 Quick Reference (10 common findings with scores)
+- Pre-Severity Gate (5 checks before labeling Critical/High)
+- Evidence Hygiene Protocol (cookie redaction, PII black-bar, retraction discipline)
+- Kill Fast Rules (5-minute rule, precondition count, impact test)
 
 ### 1. bug-bounty-reconnaissance (v3.3, 950+ lines)
 
@@ -52,12 +78,12 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "test robots.txt disallowed paths for access"
 - "extract admin URLs from page JavaScript source"
 
-### 3. bug-bounty-exploitation (v3.7, 2500+ lines)
+### 3. bug-bounty-exploitation (v3.8, 2800+ lines)
 
 | Attribute | Value |
 |-----------|-------|
 | **When it fires** | After a vulnerability is confirmed. The largest skill — covers every exploitation technique from UNION SQLi to XSS polyglots to business logic to unprotected admin + JS-disclosed admin URL exploitation |
-| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE, admin panel, delete user, forced browse, robots bypass, js source, unpredictable url, setAttribute, view source |
+| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE, admin panel, delete user, forced browse, robots bypass, js source, unpredictable url, setAttribute, view source, smuggling, CL.TE, TE.CL, H2.CL, race condition, single-packet, turbo intruder, last-byte-sync |
 | **What it produces** | Working exploit payloads, extracted data, admin credentials, impact evidence, admin panel access, user deletion PoC |
 | **Next step** | Pass credentials/impact data to `bug-bounty-reporting` |
 
@@ -72,7 +98,9 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "extract admin URL from page JavaScript and exploit it"
 
 **Key sections (largest skill)**:
-- Unprotected Admin Exploitation: 6 attack patterns (robots.txt, forced browsing, sitemap leaks, redirect follow, action enumeration, JS source disclosure — NEW in v3.7)
+- HTTP Request Smuggling: CL.TE/TE.CL/H2.CL/H2.TE with target-suitability matrix, CDN+origin chains, impact chains (cache poison, cred theft, auth bypass) — NEW in v3.8
+- Race Conditions: HTTP/2 single-packet technique, Turbo Intruder BURP2, last-byte-sync, crown jewel targets, race-window estimation — NEW in v3.8
+- Unprotected Admin Exploitation: 6 attack patterns (robots.txt, forced browsing, sitemap leaks, redirect follow, action enumeration, JS source disclosure)
 - SQL Injection: UNION, blind boolean, time-based, conditional error, CAST leak, Oracle enumeration
 - XSS: 80+ event handlers, consuming tags, restricted char bypasses, framework XSS, prototype pollution, polyglots
 - SSRF: cloud metadata, Kubernetes pivoting, IP bypass library
@@ -158,7 +186,8 @@ User: "solve this PortSwigger lab using bughuntskills"
 
 | Skill | Lines | Focus |
 |-------|-------|-------|
-| Exploitation | 2500+ | Deepest — every PoC technique with payloads, 6 admin exploitation patterns |
+| Methodology | 480+ | 7-Question Gate, discipline rules, always-rejected list, CVSS scoring — session orchestrator |
+| Exploitation | 2800+ | Deepest — every PoC technique, smuggling + race condition single-packet, 6 admin patterns |
 | Vulnerability Assessment | 1150+ | Detection patterns, filter analysis, WAF bypass, forced browsing + JS source analysis |
 | Reconnaissance | 950+ | Full discovery pipeline, robots.txt/sitemap/JS source admin URL extraction |
 | Reporting | 963 | Templates, CVSS, CWE, platform checklists |
@@ -181,8 +210,14 @@ WAF bypass?                      → bug-bounty-vulnerability-assessment (detect
 SQL injection extraction?        → bug-bounty-exploitation
 XSS payload needed?              → bug-bounty-exploitation
 JWT/OAuth/IDOR attack?           → bug-bounty-exploitation
+HTTP request smuggling?          → bug-bounty-exploitation (smuggling section)
+Race condition single-packet?    → bug-bounty-exploitation (race condition section)
+Validate before writing report?  → bug-bounty-methodology (7-Question Gate)
+Check CVSS / severity?           → bug-bounty-methodology (CVSS quick reference)
+Is this finding even valid?      → bug-bounty-methodology (never-submit list)
+What should I do next?           → bug-bounty-methodology (5-phase workflow)
 ```
 
 ---
 
-*Last updated: 2026-06-18 — bughuntskills v3.7*
+*Last updated: 2026-06-18 — bughuntskills v3.8*
