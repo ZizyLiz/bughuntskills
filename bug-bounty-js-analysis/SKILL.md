@@ -27,7 +27,7 @@ tags:
   - parameter-discovery
   - iterative-recon
   - framework-detection
-version: "1.1"
+version: "1.2"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -108,6 +108,27 @@ The most common recon mistake: downloading JS files once, running a link extract
 - Tools: `source-map-unpack`, `js-beautify`, `jsluice`, `getJS`, `xnLinkFinder`
 - Target URL(s) with JavaScript-heavy frontend
 - Directory structure: `./bounty/{program_name}/js_analysis/{iteration_1,iteration_2,...}`
+
+### MCP Integration (Caido)
+
+Caido's batch request tools accelerate the endpoint probing phase of the iterative loop:
+
+| JS Analysis Task | MCP Tool | Benefit |
+|-----------------|----------|---------|
+| Endpoint probing (REPEAT phase) | `caido_batch_send` (concurrency=20) | Test 200 extended endpoint candidates in one call |
+| Verify live endpoints | `caido_get_request` (statusCode lookup) | Quick check which endpoints respond 200/401/403 |
+| Request inspection for JS in response | `caido_get_request` (include=responseBody) | Extract `<script>` tags from HTML responses to find new JS |
+| Session handling for authenticated endpoints | `caido_create_replay_session` | Maintain session across iteration probing |
+| Body format for API call analysis | `caido_convert_body` | Convert discovered API request bodies for parameter analysis |
+
+**Example**: Instead of `httpx -mc 200,401,403` for the REPEAT phase of iteration 2:
+```
+caido_batch_send with 200 extended endpoints labeled ep-001 through ep-200
+→ parallel concurrency=20 returns statusCode and body for each
+→ filter for statusCode=200 to find live endpoints
+→ extract <script src="..."> from response bodies to find NEW JS files
+```
+This closes the iterative loop faster: discover patterns → extend endpoints → batch-probe → find new JS from live page responses.
 
 ---
 

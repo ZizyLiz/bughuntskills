@@ -68,7 +68,7 @@ tags:
   - client-side-source-analysis
   - unpredictable-admin-url
   - automated-output
-version: "3.6"
+version: "3.7"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -846,6 +846,23 @@ GitHub Leaks Found: $(wc -l < github_leaks.txt 2>/dev/null)
 8. S3 buckets — bucket takeover, public read/write enumeration
 EOF
 ```
+
+## MCP Integration (Caido)
+
+When available, Caido MCP tools can replace CLI tools for faster, session-aware HTTP interactions:
+
+| CLI Tool | MCP Replacement | Benefit |
+|----------|----------------|---------|
+| `curl` / `httpx` single probe | `caido_send_request` | Auto cookie jar, session persistence, replay from history |
+| `httpx -mc` batch probing | `caido_batch_send` (concurrency=20) | Parallel probing with label tracking, response inspection |
+| Sitemap discovery | `caido_get_sitemap` | Returns id/label/kind for all discovered URLs |
+| Scope management | `caido_create_scope` | allowlist/denylist patterns with `*.example.com` syntax |
+| Request history search | `caido_list_requests` (httpql filter) | Query history with `req.host.eq:"shijicloud.com"` |
+| Environment variables | `caido_create_environment` | Store API keys, tokens, and target configs for placeholder use |
+| Replay sessions | `caido_create_replay_session` | Named sessions per target with isolated cookie jars |
+| Body format conversion | `caido_convert_body` | Convert between JSON ↔ form ↔ XML ↔ multipart |
+
+**Example**: Instead of `curl -sk "https://target.com/" | grep ...`, use `caido_send_request` which auto-handles cookies and returns structured headers/body. For parallel probing of 50 endpoints, `caido_batch_send` with concurrency=20 is faster than sequential `httpx`.
 
 ## Key Concepts
 

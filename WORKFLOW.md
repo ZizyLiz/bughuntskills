@@ -21,6 +21,20 @@ Each phase NOW produces its own deliverable report file:
   Reporting → BB-XXX_REPORT.md per finding + EXECUTIVE_SUMMARY.md + SUBMISSION_TRACKER.csv
 ```
 
+### MCP Integration (Caido)
+
+When Caido MCP tools are available, they accelerate phases that involve HTTP interaction:
+
+| Phase | Primary MCP Tools | Replaces |
+|-------|------------------|----------|
+| **JS Analysis** | `caido_batch_send`, `caido_get_request` | httpx endpoint probing, manual JS extraction from responses |
+| **Reconnaissance** | `caido_send_request`, `caido_get_sitemap`, `caido_create_scope` | curl probes, manual scope management, sitemap discovery |
+| **Assessment** | `caido_batch_send`, `caido_edit_request`, `caido_create_tamper_rule` | ffuf fuzzing, curl header testing, manual match/replace |
+| **Exploitation** | `caido_race_window_send`, `caido_batch_send`, `caido_edit_request`, `caido_create_replay_session` | Race condition scripts, parameter sweep loops, session isolation |
+| **Reporting** | `caido_create_finding`, `caido_export_findings`, `caido_get_request`, `caido_export_curl` | Manual finding tracking, evidence extraction from raw logs |
+
+Each skill's SKILL.md contains a **MCP Integration** section with tool→task mappings and examples. MCP tools are optional — all skills work standalone with CLI tools like curl, httpx, and ffuf.
+
 ## Skill Reference
 
 ### 0. bug-bounty-methodology (v1.0, 480+ lines) — NEW

@@ -47,7 +47,7 @@ tags:
   - cloud-metadata-reporting
   - access-control-bounty-reference
   - type-confusion-reporting
-version: "3.2"
+version: "3.3"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -86,6 +86,32 @@ mitre_attack:
 - Target program's reporting guidelines (format requirements, severity definitions)
 - Program's disclosure policy and safe harbor terms
 - Markdown editor for drafting reports
+
+### MCP Integration (Caido)
+
+Caido's findings management and request export features streamline the reporting pipeline:
+
+| Reporting Task | MCP Tool | Benefit |
+|---------------|----------|---------|
+| Create finding from request | `caido_create_finding` (requestId, title, description) | Links finding directly to the request that demonstrates it |
+| Export finding list | `caido_export_findings` | Download all findings as structured data for report generation |
+| List all findings | `caido_list_findings` (reporter filter) | Query by reporter="Claude" to get automated findings inventory |
+| Export request as curl | `caido_export_curl` (requestId) | Generate `curl` command for report appendix — reproduces exact request |
+| Get full request with response | `caido_get_request` (include=requestHeaders,responseHeaders,requestBody,responseBody) | Extract complete evidence pairs for report |
+| Request filter for evidence | `caido_list_requests` (httpql) | Query `req.host.eq:"target.com" AND resp.status.eq:200` to find hits |
+| Delete stale findings | `caido_delete_findings` (reporter) | Clean up test findings before final submission |
+
+**Example**: After exploiting a finding, link it in Caido:
+```
+caido_create_finding(
+  requestId="abc123", 
+  title="IDOR in /api/users/{id} exposes PII", 
+  description="Changing user ID from 123 to 124 returns full user profile of another tenant"
+)
+```
+Then at report-generation time, `caido_list_findings` returns all findings ready for the EXECUTIVE_SUMMARY and SUBMISSION_TRACKER.
+
+> **Note**: `caido_create_finding` accepts `reporter` parameter (default: "Claude"). Set it to differentiate automated findings from manual ones.
 
 ## Report Quality Principles (from Top-Earning Reports)
 
