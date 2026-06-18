@@ -17,13 +17,13 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 
 ## Skill Reference
 
-### 1. bug-bounty-reconnaissance (v3.2, 900+ lines)
+### 1. bug-bounty-reconnaissance (v3.3, 950+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | First skill in any hunt. Triggered by subdomain discovery, DNS enumeration, JS analysis, GitHub scanning, cloud asset discovery, robots.txt discovery, sitemap parsing |
-| **Trigger keywords** | recon, reconnaissance, subdomain, dns, enumerate, crawl, wayback, github, s3 bucket, certificate transparency, js analysis, google dork, asn, cidr, whois, robots.txt, sitemap, forced browse, admin panel discovery |
-| **What it produces** | `all_subdomains.txt`, `live_urls.txt`, `js_endpoints.txt`, `s3_buckets.txt`, `github_leaks.txt`, `api_endpoints.txt`, `robots_disclosed_paths.txt`, `high_value_hits.txt` |
+| **When it fires** | First skill in any hunt. Triggered by subdomain discovery, DNS enumeration, JS analysis, GitHub scanning, cloud asset discovery, robots.txt discovery, sitemap parsing, JavaScript source code admin URL extraction |
+| **Trigger keywords** | recon, reconnaissance, subdomain, dns, enumerate, crawl, wayback, github, s3 bucket, certificate transparency, js analysis, google dork, asn, cidr, whois, robots.txt, sitemap, forced browse, admin panel discovery, view source, js extract |
+| **What it produces** | `all_subdomains.txt`, `live_urls.txt`, `js_endpoints.txt`, `s3_buckets.txt`, `github_leaks.txt`, `api_endpoints.txt`, `robots_disclosed_paths.txt`, `js_admin_urls.txt`, `high_value_hits.txt` |
 | **Next step** | Feed output to `bug-bounty-vulnerability-assessment` |
 
 **Use when**:
@@ -31,15 +31,15 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - Expanding scope: "find all subdomains and sibling assets of example.com"
 - Finding secrets: "search GitHub for target credentials"
 - Cloud discovery: "find S3 buckets belonging to target"
-- Admin panel hunts: "check robots.txt and sitemap.xml for hidden panels"
+- Admin panel hunts: "check robots.txt, sitemap.xml, and JS source for hidden panels"
 
-### 2. bug-bounty-vulnerability-assessment (v3.3, 1057+ lines)
+### 2. bug-bounty-vulnerability-assessment (v3.4, 1150+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | After recon produces live URLs. Activates for vulnerability detection, testing methodology, filter analysis, WAF detection, forced browsing, admin panel discovery |
-| **Trigger keywords** | vulnerability, assessment, testing, find, detect, filter, waf, security level, bypass detection, sql injection, idor, xss, ssrf, business logic, forced browse, admin panel, robots.txt, unprotected admin |
-| **What it produces** | Prioritized vulnerability list, WAF fingerprint, filter bypass strategy, security level progression map, forced browsing admin hits, robots.txt bypass verification |
+| **When it fires** | After recon produces live URLs. Activates for vulnerability detection, testing methodology, filter analysis, WAF detection, forced browsing, admin panel discovery, JS source code analysis |
+| **Trigger keywords** | vulnerability, assessment, testing, find, detect, filter, waf, security level, bypass detection, sql injection, idor, xss, ssrf, business logic, forced browse, admin panel, robots.txt, unprotected admin, js source, view source, unpredictable url |
+| **What it produces** | Prioritized vulnerability list, WAF fingerprint, filter bypass strategy, security level progression map, forced browsing admin hits, robots.txt bypass verification, JS-disclosed admin panel verification |
 | **Next step** | Hand confirmed vulnerabilities to `bug-bounty-exploitation` |
 
 **Use when**:
@@ -50,13 +50,14 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "check security level progression"
 - "find unprotected admin panels via forced browsing"
 - "test robots.txt disallowed paths for access"
+- "extract admin URLs from page JavaScript source"
 
-### 3. bug-bounty-exploitation (v3.6, 2200+ lines)
+### 3. bug-bounty-exploitation (v3.7, 2500+ lines)
 
 | Attribute | Value |
 |-----------|-------|
-| **When it fires** | After a vulnerability is confirmed. The largest skill — covers every exploitation technique from UNION SQLi to XSS polyglots to business logic to unprotected admin exploitation |
-| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE, admin panel, delete user, forced browse, robots bypass |
+| **When it fires** | After a vulnerability is confirmed. The largest skill — covers every exploitation technique from UNION SQLi to XSS polyglots to business logic to unprotected admin + JS-disclosed admin URL exploitation |
+| **Trigger keywords** | exploit, exploitation, PoC, proof of concept, impact, extract, bypass, union select, blind SQLi, XSS payload, SSRF, JWT, OAuth, IDOR, XXE, admin panel, delete user, forced browse, robots bypass, js source, unpredictable url, setAttribute, view source |
 | **What it produces** | Working exploit payloads, extracted data, admin credentials, impact evidence, admin panel access, user deletion PoC |
 | **Next step** | Pass credentials/impact data to `bug-bounty-reporting` |
 
@@ -68,9 +69,10 @@ Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
 - "find the XSS payload that works"
 - "access the admin panel from robots.txt"
 - "delete the target user via unprotected admin"
+- "extract admin URL from page JavaScript and exploit it"
 
 **Key sections (largest skill)**:
-- Unprotected Admin Exploitation: robots.txt → admin panel → delete user (NEW in v3.6)
+- Unprotected Admin Exploitation: 6 attack patterns (robots.txt, forced browsing, sitemap leaks, redirect follow, action enumeration, JS source disclosure — NEW in v3.7)
 - SQL Injection: UNION, blind boolean, time-based, conditional error, CAST leak, Oracle enumeration
 - XSS: 80+ event handlers, consuming tags, restricted char bypasses, framework XSS, prototype pollution, polyglots
 - SSRF: cloud metadata, Kubernetes pivoting, IP bypass library
@@ -156,9 +158,9 @@ User: "solve this PortSwigger lab using bughuntskills"
 
 | Skill | Lines | Focus |
 |-------|-------|-------|
-| Exploitation | 2200+ | Deepest — every PoC technique with payloads, now + unprotected admin |
-| Vulnerability Assessment | 1057+ | Detection patterns, filter analysis, WAF bypass, forced browsing discovery |
-| Reconnaissance | 900+ | Full discovery pipeline, robots.txt/sitemap parsing |
+| Exploitation | 2500+ | Deepest — every PoC technique with payloads, 6 admin exploitation patterns |
+| Vulnerability Assessment | 1150+ | Detection patterns, filter analysis, WAF bypass, forced browsing + JS source analysis |
+| Reconnaissance | 950+ | Full discovery pipeline, robots.txt/sitemap/JS source admin URL extraction |
 | Reporting | 963 | Templates, CVSS, CWE, platform checklists |
 | XXE | 285 | XML-specific exploitation |
 | SSRF | 225 | Cloud/internal service pivoting |
@@ -183,4 +185,4 @@ JWT/OAuth/IDOR attack?           → bug-bounty-exploitation
 
 ---
 
-*Last updated: 2026-06-18 — bughuntskills v3.6*
+*Last updated: 2026-06-18 — bughuntskills v3.7*

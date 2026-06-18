@@ -64,7 +64,10 @@ tags:
   - sensitive-path-discovery
   - unprotected-admin
   - information-disclosure
-version: "3.2"
+  - js-admin-url-extraction
+  - client-side-source-analysis
+  - unpredictable-admin-url
+version: "3.3"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -764,6 +767,45 @@ echo "[+] Robots.txt files found: $(grep -c '===' recon/sensitive_disclosure/rob
 echo "[+] Sitemaps found: $(wc -l < recon/sensitive_disclosure/sitemaps_found.txt 2>/dev/null)"
 echo "[+] Interesting paths total: $(wc -l < recon/sensitive_disclosure/interesting_paths.txt 2>/dev/null)"
 echo "[+] Unprotected admin panels (200): $(grep -cE '\[200\].*admin' recon/sensitive_disclosure/interesting_paths.txt 2>/dev/null)"
+
+# === JavaScript Source Code Admin URL Extraction ===
+# Key insight: PortSwigger "Unpredictable URL" labs — admin panel URL is disclosed
+# in the page's inline JavaScript, visible to any visitor who views page source.
+# These URLs are NOT in robots.txt or sitemap.xml — only in client-side source.
+
+echo "=== JavaScript-Disclosed Admin URLs ===" > recon/sensitive_disclosure/js_admin_urls.txt
+while IFS= read -r url; do
+  html=$(curl -sk -m 5 "$url" 2>/dev/null)
+  # Pattern 1: setAttribute('href', '/admin-xxxx')
+  echo "$html" | grep -oP "setAttribute\s*\(\s*['\"]href['\"]\s*,\s*['\"]\K/admin-[a-z0-9]+" | \
+    while read admin_path; do
+      echo "$url$admin_path" >> recon/sensitive_disclosure/js_admin_urls.txt
+      echo "[JS ADMIN URL] $url$admin_path"
+    done
+  # Pattern 2: href="/admin-xxxx" in <script> blocks
+  echo "$html" | grep -oP 'href\s*=\s*[\x27\x22]\K/admin-[a-z0-9]+' | \
+    while read admin_path; do
+      echo "$url$admin_path" >> recon/sensitive_disclosure/js_admin_urls.txt
+      echo "[JS ADMIN URL (href)] $url$admin_path"
+    done
+  # Pattern 3: innerHTML with admin URL
+  echo "$html" | grep -oP 'innerHTML\s*=\s*[\x27\x22]\K/admin-[a-z0-9]+' | \
+    while read admin_path; do
+      echo "$url$admin_path" >> recon/sensitive_disclosure/js_admin_urls.txt
+      echo "[JS ADMIN URL (innerHTML)] $url$admin_path"
+    done
+  # Pattern 4: Generic admin/panel paths in script src/href attributes
+  echo "$html" | grep -oP '(?:src|href)\s*=\s*[\x27\x22]\K/(?:admin[a-z0-9-]*|panel[a-z0-9-]*|dashboard[a-z0-9-]*)[\x27\x22]' | \
+    while read admin_path; do
+      echo "$url$admin_path" >> recon/sensitive_disclosure/js_admin_urls.txt
+    done
+done < live_urls.txt
+
+sort -u recon/sensitive_disclosure/js_admin_urls.txt -o recon/sensitive_disclosure/js_admin_urls.txt
+echo "[+] JS-disclosed admin URLs: $(wc -l < recon/sensitive_disclosure/js_admin_urls.txt)"
+
+# Merge JS-discovered URLs into high-value hits
+cat recon/sensitive_disclosure/js_admin_urls.txt 2>/dev/null >> recon/sensitive_disclosure/high_value_hits.txt
 ```
 
 ### Step 14: Asset Inventory and Prioritization
