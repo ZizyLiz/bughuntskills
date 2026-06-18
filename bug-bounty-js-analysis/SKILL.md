@@ -27,7 +27,7 @@ tags:
   - parameter-discovery
   - iterative-recon
   - framework-detection
-version: "1.0"
+version: "1.1"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -107,7 +107,7 @@ The most common recon mistake: downloading JS files once, running a link extract
 - Node.js 18+ for source map parsing and JS beautification
 - Tools: `source-map-unpack`, `js-beautify`, `jsluice`, `getJS`, `xnLinkFinder`
 - Target URL(s) with JavaScript-heavy frontend
-- Directory structure: `recon/js_analysis/{iteration_1,iteration_2,...}`
+- Directory structure: `./bounty/{program_name}/js_analysis/{iteration_1,iteration_2,...}`
 
 ---
 
@@ -117,8 +117,8 @@ The most common recon mistake: downloading JS files once, running a link extract
 
 ```bash
 ITER=1
-mkdir -p recon/js_analysis/iteration_${ITER}/{bundles,sourcemaps,output}
-cd recon/js_analysis/iteration_${ITER}
+mkdir -p ./bounty/{program_name}/js_analysis/iteration_${ITER}/{bundles,sourcemaps,output}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # Method 1: getJS — pulls all JS from a URL
 getJS --url https://target.com --complete --output bundles/
@@ -160,7 +160,7 @@ echo "[Iteration ${ITER}] Beautified files in beautified/"
 
 ```bash
 ITER=1
-cd recon/js_analysis/iteration_${ITER}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # === DISCOVERY PHASE ===
 
@@ -238,7 +238,7 @@ echo "  Secrets: $(wc -l < output/secrets.txt)"
 
 ```bash
 ITER=1
-cd recon/js_analysis/iteration_${ITER}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # === PATTERN ANALYSIS ===
 
@@ -312,7 +312,7 @@ echo "  Auth model: $(cat output/auth_patterns.txt | head -5)"
 
 ```bash
 ITER=1
-cd recon/js_analysis/iteration_${ITER}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # === EXTENDED DISCOVERY ===
 
@@ -378,7 +378,7 @@ echo "[EXTEND] Generated $(wc -l < output/extended_endpoints.txt) extended endpo
 
 ```bash
 ITER=1
-cd recon/js_analysis/iteration_${ITER}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # === TEST EXTENDED ENDPOINTS ===
 
@@ -422,8 +422,8 @@ fi
 ```bash
 # === ITERATION 2: READ new JS from iteration 1 ===
 ITER=2
-mkdir -p recon/js_analysis/iteration_${ITER}/{bundles,beautified,output}
-cd recon/js_analysis/iteration_${ITER}
+mkdir -p ./bounty/{program_name}/js_analysis/iteration_${ITER}/{bundles,beautified,output}
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # Download newly discovered JS files
 cat ../iteration_1/output/truly_new_js.txt | while read js_url; do
@@ -573,7 +573,7 @@ urllib3.disable_warnings()
 import requests
 
 class JSAnalyzer:
-    def __init__(self, target_url, output_dir="./recon/js_analysis"):
+    def __init__(self, target_url, output_dir="./bounty/{program_name}/js_analysis"):
         self.target = target_url
         self.base = output_dir
         self.iteration = 1
