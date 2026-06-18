@@ -68,7 +68,7 @@ tags:
   - client-side-source-analysis
   - unpredictable-admin-url
   - automated-output
-version: "3.5"
+version: "3.6"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -110,7 +110,7 @@ mitre_attack:
 - GitHub Personal Access Token for code search (credential leak discovery)
 - Cloud provider CLI tools: awscli, gcloud, az (for bucket enumeration)
 - Dedicated reconnaissance VM or VPS to avoid rate-limiting on your primary IP
-- Organize outputs at `~/bugbounty/{program_name}/recon/`
+- Organize outputs at `./bounty/{program_name}/recon/`
 
 ## Workflow
 
@@ -119,8 +119,8 @@ mitre_attack:
 Parse and validate the bug bounty scope before any enumeration begins:
 
 ```bash
-mkdir -p ~/bugbounty/{program_name}/{recon,vulns,exploits,reports}
-cd ~/bugbounty/{program_name}
+mkdir -p ./bounty/{program_name}/{recon,vulns,exploits,reports}
+cd ./bounty/{program_name}
 
 # Define scope — handles both wildcard and specific targets
 cat > recon/scope.txt << 'EOF'
@@ -160,7 +160,7 @@ grep -v '^\*\.\|^$\|^#' recon/scope.txt | grep -v '^$' > recon/specific_targets.
 Gather subdomains without directly querying target DNS servers. **Based on disclosed H1 reports, certificate transparency logs (crt.sh) are the single highest-yield passive source — they've revealed staging, dev, admin, and internal subdomains across hundreds of reports.**
 
 ```bash
-cd ~/bugbounty/{program_name}/recon
+cd ./bounty/{program_name}/recon
 
 # Subfinder with all passive sources
 subfinder -dL wildcard_domains.txt -all -o subfinder_passive.txt
@@ -453,12 +453,12 @@ cat ../interesting_files.txt | grep '\.js$' | httpx -mc 200 -sr -srd js_download
 
 # Extract endpoints from JavaScript
 for jsfile in $(find js_downloads/ -name "*.js" -type f); do
-  python3 ~/tools/LinkFinder/linkfinder.py -i "$jsfile" -o cli >> ../js_endpoints.txt 2>/dev/null
+  python3 linkfinder -i "$jsfile" -o cli >> ../js_endpoints.txt 2>/dev/null
 done
 
 # Extract secrets and API keys
 for jsfile in $(find js_downloads/ -name "*.js" -type f); do
-  python3 ~/tools/SecretFinder/SecretFinder.py -i "$jsfile" -o cli >> ../js_secrets.txt 2>/dev/null
+  python3 SecretFinder -i "$jsfile" -o cli >> ../js_secrets.txt 2>/dev/null
 done
 
 # Manual grep for common patterns

@@ -1,0 +1,10 @@
+/500
+/acNormalLogin
+/appletShow
+/changePassword
+/login
+/logout
+/questionnaireLogin
+/sepLogin
+/shijiEmailLogin
+/transfer

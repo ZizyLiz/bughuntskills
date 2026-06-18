@@ -1,0 +1,20 @@
+import { render, staticRenderFns } from "./ACNormalLogin.vue?vue&type=template&id=54d3c24d&scoped=true"
+import script from "./ACNormalLogin.vue?vue&type=script&lang=js"
+export * from "./ACNormalLogin.vue?vue&type=script&lang=js"
+import style0 from "./ACNormalLogin.vue?vue&type=style&index=0&id=54d3c24d&prod&scoped=true&lang=css"
+
+
+/* normalize component */
+import normalizer from "!../../node_modules/vue-loader/lib/runtime/componentNormalizer.js"
+var component = normalizer(
+  script,
+  render,
+  staticRenderFns,
+  false,
+  null,
+  "54d3c24d",
+  null
+  
+)
+
+export default component.exports

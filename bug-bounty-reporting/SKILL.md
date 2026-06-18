@@ -47,7 +47,7 @@ tags:
   - cloud-metadata-reporting
   - access-control-bounty-reference
   - type-confusion-reporting
-version: "3.1"
+version: "3.2"
 author: mahipal
 license: Apache-2.0
 nist_csf:
@@ -110,8 +110,8 @@ Analysis of 10,000+ disclosed HackerOne reports reveals common traits of high-qu
 ### Step 1: Findings Inventory and Prioritization
 
 ```bash
-mkdir -p ~/bugbounty/{program_name}/reporting/{findings,evidence,submissions}
-cd ~/bugbounty/{program_name}/reporting
+mkdir -p ./bounty/{program_name}/reporting/{findings,evidence,submissions}
+cd ./bounty/{program_name}/reporting
 
 # Build findings inventory sorted by bounty potential
 cat > findings_inventory.md << 'EOF'
@@ -957,7 +957,7 @@ The XML parser decodes `&#x55;&#x4e;&#x49;&#x4f;&#x4e;` to `UNION` AFTER the WAF
 
 ```bash
 #!/bin/bash
-# save as: ~/bugbounty/{program_name}/generate_report.sh
+# save as: ./bounty/{program_name}/generate_report.sh
 # Run after assessment/exploitation phases
 
 PROGRAM="${1:-unknown_program}"

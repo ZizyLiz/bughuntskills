@@ -1,0 +1,6 @@
+var render = function render(){var _vm=this,_c=_vm._self._c;return _c('div',{staticClass:"login-footer"},[_vm._m(0),_c('div',{staticClass:"shiji-footer"},[_c('span',[_vm._v(" © "+_vm._s(_vm.currentYear)+" Shiji Group. All rights reserved.")])])])
+}
+var staticRenderFns = [function (){var _vm=this,_c=_vm._self._c;return _c('div',{staticClass:"footer-links"},[_c('div',[_c('a',{staticClass:"footer-a-style",attrs:{"href":"https://www.shijigroup.com/privacy-policy","target":"_blank"}},[_vm._v(" Privacy Policy ")]),_c('i',{staticClass:"i_con"})]),_c('div',[_c('a',{staticClass:"footer-a-style",attrs:{"href":"https://www.shijigroup.com/terms/legal-notice","target":"_blank"}},[_vm._v(" Legal Notice ")]),_c('i',{staticClass:"i_con"})]),_c('div',[_c('a',{staticClass:"footer-a-style",attrs:{"href":"https://docs.shijigroup.com/zh-CN/bundle/Shiji_Enterprise_Platform_Contact_Details/page/CONTACT_DETAILS/concepts/c_shiji_enterprise_platform_contact_support.html","target":"_blank"}},[_vm._v(" Contact Support ")])])])
+}]
+
+export { render, staticRenderFns }

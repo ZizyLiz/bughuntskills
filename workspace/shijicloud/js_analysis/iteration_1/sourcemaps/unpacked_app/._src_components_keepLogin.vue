@@ -1,0 +1,5 @@
+var render = function render(){var _vm=this,_c=_vm._self._c;return _c('div',[_c('div',{staticClass:"isKeepStyle"},[_c('div',{staticClass:"margin-bottom"},[_c('h1',{directives:[{name:"show",rawName:"v-show",value:(_vm.showLanguage == 'zh' || !_vm.showLanguage),expression:"showLanguage == 'zh' || !showLanguage"}],staticClass:"login-h1",staticStyle:{"margin-bottom":"20px"}},[_vm._v(" 保持登录状态 ")]),_c('h1',{directives:[{name:"show",rawName:"v-show",value:(_vm.showLanguage == 'en' || !_vm.showLanguage),expression:"showLanguage == 'en' || !showLanguage"}],staticClass:"login-h1",staticStyle:{"margin-bottom":"20px"}},[_vm._v(" Stay Logged In ")]),_c('div',{staticClass:"buttonFlex"},[_c('button',{staticClass:"yesButton",on:{"click":_vm.isKeepTrue}},[_vm._v("Yes")]),_c('button',{staticClass:"noButton",on:{"click":_vm.isKeepFalse}},[_vm._v("No")])])])])])
+}
+var staticRenderFns = []
+
+export { render, staticRenderFns }
