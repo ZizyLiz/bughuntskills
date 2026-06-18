@@ -2,7 +2,7 @@
 
 ## Skill Architecture
 
-bughuntskills uses 7 standalone skills, each in its own folder with a SKILL.md file.
+bughuntskills uses 9 standalone skills, each in its own folder with a SKILL.md file.
 Skills auto-activate based on trigger keywords and domain matching. This guide explains
 when each skill fires and how they chain together in a complete bug bounty workflow.
 
@@ -65,7 +65,18 @@ Each phase NOW produces its own deliverable report file:
 - Cloud discovery: "find S3 buckets belonging to target"
 - Admin panel hunts: "check robots.txt, sitemap.xml, and JS source for hidden panels"
 
-### 2. bug-bounty-vulnerability-assessment (v3.4, 1150+ lines)
+### 1.5. bug-bounty-js-analysis (v1.0, 750+ lines) — Deep JS Recon
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | JavaScript-heavy targets (SPAs, webpack chunks) — iterative endpoint discovery pipeline |
+| **Trigger keywords** | js analysis, javascript endpoint, source map, webpack, spa routes, js deobfuscate, chunk analysis, vue routes, react routes, nextjs pages |
+| **What it produces** | Endpoint inventory per iteration, secret inventory, framework detection, source-map restored source, extended endpoint candidates |
+| **Next step** | Feed discovered endpoints to `bug-bounty-vulnerability-assessment` |
+
+**Key innovation**: Read → Discover → Get Patterns → Extend → Repeat loop until convergence.
+
+### 2. bug-bounty-vulnerability-assessment (v3.10, 1300+ lines)
 
 | Attribute | Value |
 |-----------|-------|
