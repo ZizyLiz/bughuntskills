@@ -148,6 +148,30 @@ Methodology → Reconnaissance → Vulnerability Assessment → Exploitation →
 - "can I hit the cloud metadata from this parameter?"
 - "bypass SSRF IP filtering"
 
+### 7. bug-bounty-toolkit (v1.0, 350+ lines) — NEW
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | When operational commands are needed — reverse shells, TTY upgrades, file transfers, tunneling, privesc enumeration |
+| **Trigger keywords** | reverse shell, tty upgrade, file transfer, port forward, tunnel, chisel, proxychains, linpeas, suid, privesc, pentest commands, tool selection |
+| **What it produces** | Reverse shell payloads, TTY upgrade commands, file transfer techniques, tunneling configurations, privesc enumeration commands, tool selection matrix |
+
+**Use when**:
+- "I need a reverse shell payload for PHP"
+- "upgrade this TTY to interactive"
+- "how do I transfer files when curl isn't available?"
+- "tunnel through to the internal network"
+- "what port scanner should I use for this scenario?"
+- "show me Linux privesc enumeration commands"
+
+**Key sections**:
+- Reverse Shell Cheat Sheet (bash, python, netcat, php, perl, ruby, lua)
+- TTY Shell Upgrade (5 methods including restricted shell escape)
+- File Transfer Techniques (HTTP servers, netcat, base64, /dev/tcp)
+- Privilege Escalation Enumeration (SUID, sudo, capabilities, cron, linpeas)
+- Tunneling & Proxying (chisel, SSH tunneling, proxychains)
+- Tool Selection Matrices (port scanner, web scanner, file transfer)
+
 ## Workflow Examples
 
 ### Example 1: Full Hunt — Single Target
@@ -186,11 +210,12 @@ User: "solve this PortSwigger lab using bughuntskills"
 
 | Skill | Lines | Focus |
 |-------|-------|-------|
-| Methodology | 480+ | 7-Question Gate, discipline rules, always-rejected list, CVSS scoring — session orchestrator |
-| Exploitation | 2800+ | Deepest — every PoC technique, smuggling + race condition single-packet, 6 admin patterns |
-| Vulnerability Assessment | 1150+ | Detection patterns, filter analysis, WAF bypass, forced browsing + JS source analysis |
+| Methodology | 480+ | 7-Question Gate, discipline rules, always-rejected list, CVSS scoring |
+| Exploitation | 3100+ | Deepest — every PoC technique, smuggling, race, 9 admin bypass patterns |
+| Vulnerability Assessment | 1300+ | Detection patterns, filter analysis, WAF bypass, ID type fingerprinting |
 | Reconnaissance | 950+ | Full discovery pipeline, robots.txt/sitemap/JS source admin URL extraction |
 | Reporting | 963 | Templates, CVSS, CWE, platform checklists |
+| Toolkit | 350+ | Reverse shells, TTY upgrade, tunneling, privesc, tool selection matrix |
 | XXE | 285 | XML-specific exploitation |
 | SSRF | 225 | Cloud/internal service pivoting |
 
