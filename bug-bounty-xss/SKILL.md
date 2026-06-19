@@ -381,6 +381,47 @@ nuclei -u "https://target.com/page?q=test" -tags xss
 
 ---
 
+## Output
+
+```
+=== XSS Assessment Summary ===
+Target: {target}
+Date: {date}
+
+## Reflection Points Found
+| Endpoint | Parameter | Context | Reflected | Status |
+|----------|-----------|---------|-----------|--------|
+| /page?q= | q | HTML body | Yes | Confirmed XSS |
+| /api/search | query | JS string | Partial | Needs bypass |
+
+## Working Payloads
+| Endpoint | Payload | Bypass Used | Impact |
+|----------|---------|-------------|--------|
+| /page?q= | <img src=x onerror=alert(1)> | None | Reflected XSS |
+
+## CSP Analysis
+- CSP Header: Missing / Present (policy: ...)
+- Bypass Possible: Yes/No
+- Weakness: unsafe-inline / CDN gadgets / nonce reuse
+
+## DOM XSS Analysis
+- Sources with sinks: {count} (location.hash → innerHTML, etc.)
+- Prototype pollution: Possible / Not possible
+- postMessage handlers: {count} (origin validated: Yes/No)
+
+## Stored XSS Candidates (to test)
+| Feature | Input Field | Payload Status |
+|---------|-------------|----------------|
+| Profile | name | Pending |
+| Comments | body | Submitted, pending trigger |
+
+## Next Phase: Exploitation
+Feeds into: bug-bounty-exploitation (cookie theft, account takeover PoC)
+Feeds into: bug-bounty-reporting (finding description, request/response pairs)
+```
+
+---
+
 ## References
 - Anthropic-Cybersecurity-Skills: `testing-for-xss-vulnerabilities`, `exploiting-prototype-pollution-in-javascript`
 - Claude-BugHunter: `hunt-xss`, `hunt-dom`

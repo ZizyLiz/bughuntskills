@@ -301,6 +301,55 @@ grpcurl -plaintext target.com:443 describe service.ServiceName
 
 ---
 
+## Output
+
+```
+=== API Security Assessment Summary ===
+Target: {target}
+Date: {date}
+
+## API Inventory
+| Endpoint | Method | Auth | Status | Notes |
+|----------|--------|------|--------|-------|
+| /api/v1/users | GET | Bearer JWT | 200 | Returns user list |
+| /api/v2/users/{id} | GET | None | 200 | BOLA confirmed |
+| /graphql | POST | Optional | 200 | Introspection ENABLED |
+| /ws/chat | WS | None | 101 | No Origin check |
+
+## OWASP API Top 10 Results
+| Category | Tested | Vulnerable | Details |
+|----------|--------|------------|---------|
+| API1: BOLA | All object IDs | Yes | /api/users/1 → 2 leaked data |
+| API2: Broken Auth | JWT tokens | No | Token properly validated |
+| API3: Mass Assignment | POST/PUT bodies | Yes | role:admin accepted |
+| API4: Rate Limiting | Auth endpoints | Yes | 1000 req/s no throttle |
+| API5: BFLA | Admin endpoints | No | Proper RBAC |
+| API7: Misconfig | CORS, errors | Yes | CORS: * origin allowed |
+| API8: Injection | All params | Pending | Needs sqlmap run |
+| API9: Asset Mgmt | Version enum | Yes | /v1/users debug endpoint active |
+
+## GraphQL Analysis
+- Introspection: Enabled / Disabled
+- Sensitive Fields Exposed: {count} (password_hash, internal_notes)
+- Query Depth DoS: Possible / Not possible (max depth: {n})
+- Alias Batching: Limited / Unlimited
+
+## WebSocket
+- Origin Validation: Yes / No
+- Message Injection Possible: SQLi / XSS / IDOR
+
+## JWT Analysis
+- Algorithm: RS256 / HS256
+- alg:none attack: Possible / Blocked
+- Secret Weakness: None / Crackable (/usr/share/wordlists/rockyou.txt)
+
+## Next Phase: Exploitation
+Feeds into: bug-bounty-exploitation (BOLA PoC, mass assignment chain, GraphQL injection)
+Feeds into: bug-bounty-reporting (API endpoint details, request/response pairs)
+```
+
+---
+
 ## References
 - Anthropic-Cybersecurity-Skills: `conducting-api-security-testing`, `testing-api-for-broken-object-level-authorization`, `testing-api-authentication-weaknesses`, `testing-api-for-mass-assignment-vulnerability`, `performing-api-rate-limiting-bypass`, `performing-graphql-security-assessment`, `testing-websocket-api-security`
 - Claude-BugHunter: `hunt-api-misconfig`, `hunt-graphql`, `hunt-grpc`, `hunt-websocket`, `hunt-idor`, `hunt-oauth`

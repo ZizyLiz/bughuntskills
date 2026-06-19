@@ -282,6 +282,47 @@ Cookie: session=' OR '1'='1' --
 
 ---
 
+## Output
+
+```
+=== SQL Injection Assessment Summary ===
+Target: {target}
+Date: {date}
+
+## Injection Points
+| Endpoint | Parameter | DB Type | Technique | Confirm |
+|----------|-----------|---------|-----------|---------|
+| /api/users?id= | id | MySQL | Error-based | SLEEP(5) confirmed |
+| POST /login | username | MongoDB | NoSQL blind | $gt bypass confirmed |
+
+## Database Schema (Extracted)
+- Databases: {count} (names: ...)
+- Tables of Interest: {count} (users, admins, tokens, etc.)
+- Columns of Interest: {count} (password_hash, email, role, etc.)
+
+## Extracted Data
+| Table | Row Count | High-Value Fields |
+|-------|-----------|-------------------|
+| users | 1,234 | email, password_hash, role |
+| api_keys | 56 | key, secret, service |
+
+## WAF Bypass Used
+- WAF Type: Akamai / Cloudflare / ModSecurity
+- Successful Tamper Scripts: {list}
+- sqlmap command: sqlmap -u "..." --tamper=between,randomcase,space2comment
+
+## sqlmap Log
+- Risk/Level: {level}
+- Time per request: {ms}
+- Successful techniques: B / E / T / U / Q
+
+## Next Phase: Exploitation
+Feeds into: bug-bounty-exploitation (os-shell, file-read, privilege escalation)
+Feeds into: bug-bounty-reporting (sqlmap output, extracted data samples)
+```
+
+---
+
 ## References
 - Anthropic-Cybersecurity-Skills: `exploiting-sql-injection-vulnerabilities`, `exploiting-sql-injection-with-sqlmap`, `exploiting-nosql-injection-vulnerabilities`
 - Claude-BugHunter: `hunt-sqli`, `hunt-nosqli`
