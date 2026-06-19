@@ -279,26 +279,43 @@ mkdir -p ./bounty/{program_name}/js_analysis/iteration_${ITER}/{bundles,sourcema
 cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
 # ============================================================
-# CRITICAL: Session Configuration
-# Many JS files behind CDNs (Akamai, Cloudflare) or auth walls
-# return 403 when requested without browser session cookies.
+# METHOD 1 (PREFERRED): Get JS URLs from Caido/Burp request history
 # ============================================================
-# Option A: Export cookies from Caido/Burp
-#   Caido: use session cookies from active session
-#   Browser: Export cookies to cookies.txt format
-# Option B: Save raw Cookie header from browser DevTools
-#   echo "sessionid=abc123; token=xyz" > session_cookies.txt
+# Caido/Burp already captured every JS file the browser loaded,
+# including lazy chunks that would be hard to discover otherwise.
+# This is the most reliable method — no guessing filenames.
 
-# Configure your curl to use session cookies
-COOKIE_FILE="./session_cookies.txt"
-CURL_OPTS="-sk --cookie $COOKIE_FILE"
-# Or for Bearer auth:
-# CURL_OPTS="-sk -H 'Authorization: Bearer TOKEN'"
-# Or to bypass dry-run and skip cookie entirely:
-# CURL_OPTS="-sk"
+# Using Caido MCP:
+#   caido_list_requests → filter by .js extension in URL
+#   Extract all unique JS URLs, then download via caido_edit_request
+#   (preserves session cookies from the original request)
 
-# Method 1: getJS — pulls all JS from a URL (note: getJS may not send cookies)
-getJS --url https://target.com --complete --output bundles/
+# Using Burp Suite:
+#   Export HTTP history → grep for .js files → extract unique URLs
+
+# Using CLI (if Caido MCP unavailable):
+echo "=== JS files from Caido request history ==="
+# Manual: curl each URL found in the proxy
+# Or save URLs to a file:
+cat > caido_js_urls.txt << 'EOF'
+# Paste JS URLs extracted from Caido list_requests output here
+# Example:
+# https://cdn6.agoda.net/cdn-bfspa/js/mspa/bfPackages.xxxxx.js
+# https://cdn6.agoda.net/cdn-bfspa/js/mspa/yyyy.chunk.js
+EOF
+
+# Download each discovered JS with session cookies
+while read url; do
+  [[ "$url" == \#* || -z "$url" ]] && continue
+  curl -sk --cookie ./session_cookies.txt "$url" -o "bundles/$(echo $url | sed 's/.*\///; s/?.*//')" 2>/dev/null
+  echo "Downloaded: $url"
+done < caido_js_urls.txt
+
+echo ""
+echo "=== Also check getClientSideAssets endpoint for base bundles ==="
+# ============================================================
+# METHOD 2: getJS — pulls all JS from a URL (may miss lazy chunks)
+# ============================================================
 
 # Method 2: Wayback Machine JS collection (historical, no auth needed)
 waybackurls target.com | grep '\.js$' | sort -u > bundles/wayback_js_urls.txt
