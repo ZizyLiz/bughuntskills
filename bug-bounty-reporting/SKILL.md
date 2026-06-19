@@ -702,6 +702,8 @@ internal infrastructure."}
 
 ## Output Format
 
+Save to: `./bounty/{program_name}/reporting/REPORTING_SUMMARY.md`
+
 ```
 === Bug Bounty Reporting Summary ===
 Program: {program_name}

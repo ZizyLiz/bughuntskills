@@ -328,4 +328,38 @@ Usage: PDF generators that render user-provided HTML are a common SSRF vector
 
 ## Output
 
+Save to: `./bounty/{program_name}/ssrf/SSRF_SUMMARY.md`
+
 Successful SSRF produces: cloud IAM credentials (AWS/Azure/GCP), internal service responses (RDS, Redis, LDAP), Kubernetes service account tokens, network topology information, arbitrary file reads via `file://`, or RCE via protocol abuse (Redis cron, PostgreSQL COPY TO PROGRAM) — any of which can escalate to full cloud account takeover or internal network pivoting.
+
+```
+=== SSRF Assessment Summary ===
+Target: {target}
+Date: {date}
+
+## Confirmed SSRF Points
+| Endpoint | Parameter | Protocol | Impact | Status |
+|----------|-----------|----------|--------|--------|
+| /api/webhook | url | HTTP | IMDS access | Confirmed |
+| /proxy | url | Gopher | Redis RCE | Working |
+
+## Cloud Metadata Accessed
+- AWS: IAM role {name} credentials extracted
+- GCP: Access token for default service account
+- Azure: Managed identity token
+
+## Internal Services Reached
+| Service | Host:Port | Data Retrieved |
+|---------|-----------|----------------|
+| Redis | 10.0.0.5:6379 | Config, keys |
+| PostgreSQL | 10.0.0.10:5432 | Table listing |
+
+## Protocol Abuse
+- Gopher: Redis cron → reverse shell
+- LDAP: Internal directory dump
+- FTP: Internal file server listing
+
+## Next Phase: Exploitation
+Feeds into: bug-bounty-exploitation (cloud credential abuse, lateral movement)
+Feeds into: bug-bounty-reporting (SSRF PoC, cloud metadata screenshots)
+```

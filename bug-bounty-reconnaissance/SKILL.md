@@ -955,6 +955,8 @@ When available, Caido MCP tools can replace CLI tools for faster, session-aware 
 
 ## Output Format
 
+Save to: `./bounty/{program_name}/recon/RECON_SUMMARY.md`
+
 ```
 === Bug Bounty Reconnaissance Report ===
 Program: {program_name}

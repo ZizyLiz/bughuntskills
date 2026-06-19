@@ -383,6 +383,8 @@ nuclei -u "https://target.com/page?q=test" -tags xss
 
 ## Output
 
+Save to: `./bounty/{program_name}/xss/XSS_SUMMARY.md`
+
 ```
 === XSS Assessment Summary ===
 Target: {target}

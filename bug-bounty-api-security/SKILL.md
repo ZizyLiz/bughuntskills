@@ -303,6 +303,8 @@ grpcurl -plaintext target.com:443 describe service.ServiceName
 
 ## Output
 
+Save to: `./bounty/{program_name}/api/API_SUMMARY.md`
+
 ```
 === API Security Assessment Summary ===
 Target: {target}

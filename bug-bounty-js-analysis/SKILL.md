@@ -871,6 +871,8 @@ class JSAnalyzer:
 
 ## Output Format
 
+Save to: `./bounty/{program_name}/js_analysis/iteration_{n}/JS_ANALYSIS_SUMMARY.md`
+
 ```
 === JavaScript Analysis Report ===
 Target: https://target.com

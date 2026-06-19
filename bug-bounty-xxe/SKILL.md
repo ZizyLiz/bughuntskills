@@ -282,4 +282,40 @@ expect://id                           — PHP expect (RCE if enabled)
 
 ## Output
 
+Save to: `./bounty/{program_name}/xxe/XXE_SUMMARY.md`
+
 Successful exploitation produces: file content from target system, cloud metadata credentials, Kubernetes service account tokens, or SSRF to internal services — all usable for privilege escalation or data exfiltration PoC.
+
+```
+=== XXE Assessment Summary ===
+Target: {target}
+Date: {date}
+
+## XXE Points Found
+| Endpoint | Parameter | Technique | Impact | Status |
+|----------|-----------|-----------|--------|--------|
+| /api/upload | XML body | Classic XXE | /etc/passwd read | Confirmed |
+| /api/soap | SOAP action | Blind OOB | SSRF to metadata | Working |
+
+## Files Retrieved
+| File | Content Summary |
+|------|----------------|
+| /etc/passwd | root, www-data, deploy |
+| /etc/hosts | 10.0.0.x internal IPs |
+| /var/www/.env | DB_PASSWORD=masked |
+
+## Blind XXE Callbacks
+| Payload | Protocol | Response |
+|---------|----------|----------|
+| OOB DTD | HTTP | File content received |
+| Parameter entity | FTP | File exfiltrated |
+
+## Protocol Abuse via XXE
+- file:// reads: /etc/passwd confirmed
+- SSRF via XXE: cloud metadata reached
+- XInclude: second-order XML parsing
+
+## Next Phase: Exploitation
+Feeds into: bug-bounty-exploitation (credential abuse, SSRF chain)
+Feeds into: bug-bounty-reporting (XXE PoC, file content screenshots)
+```

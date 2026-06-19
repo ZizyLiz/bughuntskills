@@ -284,6 +284,8 @@ Cookie: session=' OR '1'='1' --
 
 ## Output
 
+Save to: `./bounty/{program_name}/sqli/SQLI_SUMMARY.md`
+
 ```
 === SQL Injection Assessment Summary ===
 Target: {target}
