@@ -134,6 +134,13 @@ This closes the iterative loop faster: discover patterns → extend endpoints �
 
 ## Workflow
 
+> **⚠️ CRITICAL: JS Retrieval via Proxy Session**
+> CDN-hosted JS bundles (Akamai, Cloudflare, Fastly) often return 403 when requested without the browser's session context. Always prefer **Caido MCP** or **Burp MCP** for JS retrieval when available — these tools auto-inject session cookies from the proxy's authenticated request history.
+> 
+> Workflow: find an existing authenticated request to the target CDN in Caido → use `edit_request` to change the path to the JS bundle URL → Caido handles the cookies automatically.
+>
+> If MCP is unavailable, export the Cookie header from browser DevTools → save as `session_cookies.txt` → pass it to curl/wget with `--cookie session_cookies.txt`.
+
 ### Iteration 1: READ — Download All JavaScript
 
 ```bash
@@ -1053,25 +1060,50 @@ done
 ```bash
 # === How to get session cookies for curl/wget ===
 
-# From Caido: Export the full Cookie header from an intercepted request
-# From Browser DevTools → Network → Copy as cURL → extract Cookie:
+# ================================================================
+# Method 1 (PREFERRED): Caido MCP — use proxy session automatically
+# ================================================================
+# Caido's send_request and edit_request tools auto-inject session
+# cookies from the proxy's cookie jar and persist Set-Cookie responses.
+# No manual cookie extraction needed — use these MCP calls directly:
 
-# Method 1: Save raw Cookie header value
+#   caido_send_request:        Sends HTTP request with session cookies
+#   caido_edit_request:        Modifies and resends an existing authenticated
+#                              request (preserves cookies from original)
+#   caido_race_window_send:    Raw socket send (BYPASSES proxy — no cookies!)
+#                              → only use for race-condition testing, NOT JS retrieval
+#
+# Best approach for CDN JS behind auth:
+#   1. Find an existing authenticated request to the CDN in Caido history
+#      (caido_list_requests filtered by CDN domain)
+#   2. Use caido_edit_request to change path to the target JS bundle URL
+#   3. Caido automatically includes the session cookies from the original request
+
+# ================================================================
+# Method 2: Caido get_session_cookies (metadata only — no values)
+# ================================================================
+# The caido_get_session_cookies MCP returns cookie metadata
+# (name/domain/path/flags) but NOT actual values. Use it to:
+#   - Verify cookies exist for a domain before requesting JS
+#   - Confirm which cookies are relevant for the CDN
+# Example:
+#   caido_get_session_cookies sessionId="session123" url="https://cdn6.agoda.net/"
+
+# ================================================================
+# Method 3: Export Cookie header from browser DevTools
+# ================================================================
+# From Caido: Export the full Cookie header from an intercepted request
 echo "sessionid=abc123; access_token=xyz789; csrftoken=def456" > session_cookies.txt
 
-# Method 2: Netscape cookie file format (for wget --load-cookies):
-# domain  include_subdomains  path  secure  expiry  name  value
+# Method 4: Netscape cookie file format (for wget --load-cookies)
 echo -e ".target.com\tTRUE\t/\tTRUE\t1893456000\tsessionid\tabc123" > cookies_netscape.txt
 
-# Method 3: Caido MCP — use send_request with session cookies automatically
-# The Caido MCP tools use the cookie jar from the active proxy session.
-# For Caido: caido_request_get --url "https://cdn.target.com/bundle.js"
-
-# Method 4: Chrome headless with cookies
+# Method 5: Chrome headless with cookies
 # google-chrome --headless --dump-dom --cookie="sessionid=abc123" \
 #   "https://cdn.target.com/bundle.js" > bundle.js
 
-# Method 5: Verify cookie works
+# Method 6: Verify cookie works
 curl -sk --cookie ./session_cookies.txt "https://cdn.target.com/bundle.js" -o /dev/null -w "HTTP:%{http_code} Size:%{size_download}\n"
+```
 ```
 
