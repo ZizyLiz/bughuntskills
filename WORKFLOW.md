@@ -90,7 +90,34 @@ Each skill's SKILL.md contains a **MCP Integration** section with tool→task ma
 
 **Key innovation**: Read → Discover → Get Patterns → Extend → Repeat loop until convergence.
 
-### 2. bug-bounty-vulnerability-assessment (v3.10, 1300+ lines)
+### 2. bug-bounty-xss (v1.0, 500+ lines) — NEW
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | During vulnerability assessment when reflection points are found, or as a dedicated XSS hunt on specific endpoints |
+| **Trigger keywords** | xss, cross-site scripting, reflected, stored, dom-based, blind xss, csp bypass, waf bypass, javascript injection, html injection |
+| **What it produces** | Context-classified reflection points, working XSS payloads, CSP analysis, DOM sources/sinks inventory |
+| **Next step** | Report findings or escalate to exploitation |
+
+### 3. bug-bounty-sql-injection (v2.0, 400+ lines) — NEW
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | When SQL errors appear, time delays observed, or during structured SQLi detection phase |
+| **Trigger keywords** | sqli, sql injection, database, error-based, blind injection, time-based, union select, sqlmap, nosql, mongodb injection |
+| **What it produces** | Injection point confirmation, database type, extracted data, WAF bypass tamper script combination |
+| **Next step** | Report extracted data or escalate to exploitation |
+
+### 4. bug-bounty-api-security (v1.0, 300+ lines) — NEW
+
+| Attribute | Value |
+|-----------|-------|
+| **When it fires** | When API endpoints are discovered, GraphQL introspection found, WebSocket connections detected, or during API-focused assessment |
+| **Trigger keywords** | api, rest, graphql, websocket, grpc, bola, idor, mass assignment, rate limit, jwt, oauth, api security |
+| **What it produces** | API endpoint inventory, BOLA/IDOR test results, JWT analysis, GraphQL schema, WebSocket authentication status, mass assignment targets |
+| **Next step** | Feed findings to exploitation or reporting |
+
+### 5. bug-bounty-vulnerability-assessment (v3.10, 1300+ lines)
 
 | Attribute | Value |
 |-----------|-------|
@@ -263,9 +290,13 @@ XML endpoint attack?             → bug-bounty-xxe
 URL/webhook internal access?     → bug-bounty-ssrf
 WAF bypass?                      → bug-bounty-vulnerability-assessment (detection)
                                     bug-bounty-exploitation (payloads)
-SQL injection extraction?        → bug-bounty-exploitation
-XSS payload needed?              → bug-bounty-exploitation
-JWT/OAuth/IDOR attack?           → bug-bounty-exploitation
+SQL injection detection/tuning?  → bug-bounty-sql-injection (NEW)
+SQL injection extraction?        → bug-bounty-sql-injection (sqlmap) or bug-bounty-exploitation
+XSS hunting?                     → bug-bounty-xss (NEW)
+XSS payload needed?              → bug-bounty-xss (payloads section) or bug-bounty-exploitation
+API security testing?            → bug-bounty-api-security (NEW)
+JWT/OAuth/IDOR attack?           → bug-bounty-api-security (auth section) or bug-bounty-exploitation
+GraphQL/WebSocket API?           → bug-bounty-api-security (GraphQL/WS sections)
 HTTP request smuggling?          → bug-bounty-exploitation (smuggling section)
 Race condition single-packet?    → bug-bounty-exploitation (race condition section)
 Validate before writing report?  → bug-bounty-methodology (7-Question Gate)
@@ -276,4 +307,4 @@ What should I do next?           → bug-bounty-methodology (5-phase workflow)
 
 ---
 
-*Last updated: 2026-06-18 — bughuntskills v3.8*
+*Last updated: 2026-06-18 — bughuntskills v4.0*

