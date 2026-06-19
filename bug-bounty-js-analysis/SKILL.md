@@ -102,6 +102,136 @@ The most common recon mistake: downloading JS files once, running a link extract
 
 **Skip when**: the target is a traditional server-rendered app with no JS bundles (use standard link crawling instead).
 
+## Mandatory: Lazy Chunk Extraction
+
+After downloading the main bundle(s), you MUST extract and download ALL lazy chunks before proceeding to endpoint extraction. Skipping this step means missing 70-90% of the API surface for SPAs.
+
+### Step 1: Extract Chunk IDs from Main Bundle
+
+```bash
+cd ./bounty/{program_name}/js_analysis/iteration_${ITER}/bundles
+
+# Webpack lazy chunks: .e(NUMBER)
+echo "=== Webpack chunk IDs ==="
+grep -oP '\.e\([0-9]+\)' main.*.js | grep -oP '[0-9]+' | sort -un > lazy_chunk_ids.txt
+
+# Angular lazy routes: loadChildren / loadComponent with Promise.all
+echo "=== Angular routes with chunk dependencies ==="
+grep -oP 'loadChildren:\(\)=>Promise\.all\(\[[^\]]+\]' main.*.js | grep -oP '[0-9]+' >> lazy_chunk_ids.txt
+grep -oP 'loadComponent:\(\)=>Promise\.all\(\[[^\]]+\]' main.*.js | grep -oP '[0-9]+' >> lazy_chunk_ids.txt
+
+# Webpack Module Federation remote entries
+echo "=== Module Federation remotes ==="
+grep -oP 'remoteEntry[^"'"'"']*\.js' main.*.js | sort -u
+
+# Dynamic imports
+echo "=== Dynamic import() calls ==="
+grep -oP 'import\([^)]+\)' main.*.js | sort -u
+
+sort -un lazy_chunk_ids.txt -o lazy_chunk_ids.txt
+echo "Total unique chunk IDs: $(wc -l < lazy_chunk_ids.txt)"
+```
+
+### Step 2: Download All Lazy Chunks
+
+```bash
+# Chunks may be at different URL patterns depending on webpack config
+# Try multiple patterns until one works:
+
+CHUNK_COUNT=0
+for id in $(cat lazy_chunk_ids.txt); do
+  # Pattern 1: /{id}.js
+  curl -sk "https://target.com/${id}.js" -o "chunk_${id}.js" -w "%{http_code}" 2>/dev/null
+  # Pattern 2: /{id}.chunk.js (Angular/CRA convention)
+  [ ! -s "chunk_${id}.js" ] && curl -sk "https://target.com/${id}.chunk.js" -o "chunk_${id}.js" -w "%{http_code}" 2>/dev/null
+  # Pattern 3: /static/js/{id}.chunk.js (CRA convention)
+  [ ! -s "chunk_${id}.js" ] && curl -sk "https://target.com/static/js/${id}.chunk.js" -o "chunk_${id}.js" -w "%{http_code}" 2>/dev/null
+  # Pattern 4: /chunk-{id}.js (webpack default)
+  [ ! -s "chunk_${id}.js" ] && curl -sk "https://target.com/chunk-${id}.js" -o "chunk_${id}.js" -w "%{http_code}" 2>/dev/null
+  # Pattern 5: /js/chunk-{id}.js
+  [ ! -s "chunk_${id}.js" ] && curl -sk "https://target.com/js/chunk-${id}.js" -o "chunk_${id}.js" -w "%{http_code}" 2>/dev/null
+  
+  if [ -s "chunk_${id}.js" ]; then
+    CHUNK_COUNT=$((CHUNK_COUNT + 1))
+  fi
+done
+
+# If ALL patterns failed: extract chunk filenames from webpack JSONP array
+if [ "$CHUNK_COUNT" -eq 0 ] && [ -s "lazy_chunk_ids.txt" ]; then
+  echo "Direct URL patterns failed. Extracting chunk filenames from webpack bootstrap..."
+  grep -oP '\[[0-9]+\]=\{["'"'"'][^:]+:[^,]+' main.*.js | head -30
+  # Alternative: look for webpack installedChunks / jsonp array
+  grep -oP '\.push\(\[[0-9]+\],\{' main.*.js
+fi
+
+echo "Downloaded $CHUNK_COUNT lazy chunks"
+```
+
+### Step 3: Download Module Federation Remote Entries
+
+```bash
+# Module Federation exposes remote apps with their own chunks
+grep -oP 'remoteEntry[^"'"'"']*\.js|remoteEntry[^"'"'"']*' main.*.js | sort -u > remote_entries.txt
+
+for remote in $(cat remote_entries.txt); do
+  # Handle relative URLs
+  if [[ "$remote" == http* ]]; then
+    url="$remote"
+  else
+    url="https://target.com/${remote#/}"
+  fi
+  curl -sk "$url" -o "$(basename $remote)"
+  
+  # Each remote entry has its OWN set of chunks — extract them
+  if [ -s "$(basename $remote)" ]; then
+    echo "=== Chunks in $(basename $remote) ==="
+    grep -oP '\.e\([0-9]+\)' "$(basename $remote)" | grep -oP '[0-9]+' | sort -un > remote_chunks.txt
+    # Download remote chunks
+    # ...
+  fi
+done
+```
+
+### Step 4: Deobfuscate and Analyze Lazy Chunks
+
+```bash
+# Beautify all downloaded chunks
+mkdir -p beautified_chunks
+for chunk in chunk_*.js; do
+  js-beautify "$chunk" > "beautified_chunks/$(basename $chunk)" 2>/dev/null
+done
+
+# Extract endpoints from chunks (THIS IS WHERE MOST API ROUTES LIVE)
+echo "=== Endpoints from lazy chunks ==="
+for chunk in beautified_chunks/*.js; do
+  grep -oP '"([/](?:api|v[0-9]|graphql|rest|rpc|ws)/[a-zA-Z0-9/_{}:]+)"' "$chunk" | tr -d '"'
+  grep -oP "'([/](?:api|v[0-9]|graphql|rest|rpc|ws)/[a-zA-Z0-9/_{}:]+)'" "$chunk" | tr -d "'"
+  
+  # Template literal paths in chunks
+  grep -oP '`[^`]{0,300}(?:v[0-9]|api|rest|graphql)[^`]{0,300}`' "$chunk" | \
+    sed 's/`//g' | grep -oP '/[a-zA-Z0-9_/{}${}\[\]]+' | grep -v '^\s*$'
+done | sort -u >> output/chunk_endpoints.txt
+
+# Extract HTTP method calls from chunks (service classes, API calls)
+echo "=== HTTP calls from chunks ==="
+for chunk in beautified_chunks/*.js; do
+  grep -oP '\.(get|post|put|patch|delete|request)\s*\([^)]+' "$chunk"
+  grep -oP '(?:basePath|baseUrl|apiUrl)\s*\+\s*["'"'"'][^"'"'"']+' "$chunk"
+done | sort -u >> output/chunk_http_calls.txt
+
+echo "Total chunk endpoints: $(wc -l < output/chunk_endpoints.txt)"
+echo "Total chunk HTTP calls: $(wc -l < output/chunk_http_calls.txt)"
+```
+
+### Step 5: Also Verify Chunk URLs from Webpack Public Path
+
+```bash
+# If chunks still not found, extract the webpack public path:
+grep -oP '__webpack_require__\.p\s*=\s*["'"'"'][^"'"'"']*["'"'"']' main.*.js
+# Or the jsonpScriptSrc / script src pattern:
+grep -oP '\.src\s*=\s*["'"'"'][^"'"'"']*["'"'"']\s*\+\s*' main.*.js | head -5
+```
+
 ## Prerequisites
 
 - Node.js 18+ for source map parsing and JS beautification
@@ -240,6 +370,38 @@ for jsfile in beautified/*.js; do
   # Path template patterns: /users/{id}, /items/:id
   grep -oP "'([/][a-z][a-z0-9/_{}:]+)'" "$jsfile" | \
     tr -d "'" >> output/all_endpoints.txt
+  
+  # === CRITICAL: Template literal paths (backtick strings) ===
+  # These are COMMON in Angular/React service classes and contain
+  # the FULL API endpoint paths that other regexes miss.
+  # Examples:
+  #   `${this.baseUrl}/v1/distributor/orders/${id}/confirm`
+  #   `${basePath}/v1/users/${userId}/profile`
+  echo "=== Extracting template literal paths ==="
+  grep -oP '`[^`]{0,300}(?:v[0-9]|api|rest|graphql|rpc|ws)[^`]{0,300}`' "$jsfile" | \
+    sed 's/`//g' | grep -oP '/[a-zA-Z0-9_/{}${}\[\]]+' | \
+    grep -v '^\s*$' >> output/template_endpoints.txt
+  
+  # === CRITICAL: Extract HTTP method calls from service classes ===
+  # This finds API calls like:
+  #   this.http.get('/v1/users/list')
+  #   this.http.post(`${this.baseUrl}/v1/orders`, body)
+  # These reveal the actual API surface even when paths are constructed
+  echo "=== Extracting HTTP method call patterns ==="
+  grep -oP '\.(get|post|put|patch|delete|request)\s*\([^)]{5,300}\)' "$jsfile" | \
+    grep -oP '["'"'"'`][/a-zA-Z0-9_/{}${}:.-]{5,}["'"'"'`]' | \
+    tr -d '"'"'"' | sed "s/\$this\.//g" >> output/http_calls.txt
+  
+  # Concatenated paths: this.basePath + "/v1/users/login"
+  grep -oP '(?:basePath|baseUrl|apiUrl|BASE_URL|endpoint)\s*\+\s*["'"'"'][^"'"'"']+' "$jsfile" | \
+    sed 's/.*+//g' >> output/http_calls.txt
+done
+
+# Combine all endpoint sources and deduplicate
+cat output/all_endpoints.txt output/template_endpoints.txt output/http_calls.txt 2>/dev/null | \
+  sort -u > output/all_endpoints_combined.txt
+mv output/all_endpoints_combined.txt output/all_endpoints.txt
+echo "Total endpoints (all sources): $(wc -l < output/all_endpoints.txt)"
   
   # Template literal paths: `/api/${version}/users`
   grep -oP '`([/][a-z][a-zA-Z0-9/\${}]+)`' "$jsfile" | \
