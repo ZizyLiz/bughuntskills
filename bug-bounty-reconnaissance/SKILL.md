@@ -448,16 +448,29 @@ cat unique_urls.txt | grep -iE 'webhook|callback|notify|hook|integration' > webh
 ```bash
 mkdir -p js_analysis && cd js_analysis
 
-# Download JavaScript files
-cat ../interesting_files.txt | grep '\.js$' | httpx -mc 200 -sr -srd js_downloads/
+# ⚠️ Many CDNs (Akamai, Cloudflare) require session cookies for JS access.
+# Export Cookie header from browser DevTools → Network tab → copy as cURL
+# Save to session_cookies.txt before running:
+
+# Download JavaScript files (WITH session cookies if available)
+COOKIE_FLAG=""
+[ -f "./session_cookies.txt" ] && COOKIE_FLAG="-H 'Cookie: $(cat session_cookies.txt)'"
+cat ../interesting_files.txt | grep '\.js$' | while read js_url; do
+  curl -sk $COOKIE_FLAG "$js_url" -o "js_downloads/$(echo $js_url | sha256sum | cut -d' ' -f1).js" 2>/dev/null
+done
+
+# Alternative: httpx with cookie header
+if [ -f "./session_cookies.txt" ]; then
+  cat ../interesting_files.txt | grep '\.js$' | httpx -mc 200 -sr -srd js_downloads/ \
+    -H "Cookie: $(cat session_cookies.txt)" 2>/dev/null
+else
+  cat ../interesting_files.txt | grep '\.js$' | httpx -mc 200 -sr -srd js_downloads/
+fi
 
 # Extract endpoints from JavaScript
 for jsfile in $(find js_downloads/ -name "*.js" -type f); do
   python3 linkfinder -i "$jsfile" -o cli >> ../js_endpoints.txt 2>/dev/null
 done
-
-# Extract secrets and API keys
-for jsfile in $(find js_downloads/ -name "*.js" -type f); do
   python3 SecretFinder -i "$jsfile" -o cli >> ../js_secrets.txt 2>/dev/null
 done
 

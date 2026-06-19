@@ -141,31 +141,65 @@ ITER=1
 mkdir -p ./bounty/{program_name}/js_analysis/iteration_${ITER}/{bundles,sourcemaps,output}
 cd ./bounty/{program_name}/js_analysis/iteration_${ITER}
 
-# Method 1: getJS — pulls all JS from a URL
+# ============================================================
+# CRITICAL: Session Configuration
+# Many JS files behind CDNs (Akamai, Cloudflare) or auth walls
+# return 403 when requested without browser session cookies.
+# ============================================================
+# Option A: Export cookies from Caido/Burp
+#   Caido: use session cookies from active session
+#   Browser: Export cookies to cookies.txt format
+# Option B: Save raw Cookie header from browser DevTools
+#   echo "sessionid=abc123; token=xyz" > session_cookies.txt
+
+# Configure your curl to use session cookies
+COOKIE_FILE="./session_cookies.txt"
+CURL_OPTS="-sk --cookie $COOKIE_FILE"
+# Or for Bearer auth:
+# CURL_OPTS="-sk -H 'Authorization: Bearer TOKEN'"
+# Or to bypass dry-run and skip cookie entirely:
+# CURL_OPTS="-sk"
+
+# Method 1: getJS — pulls all JS from a URL (note: getJS may not send cookies)
 getJS --url https://target.com --complete --output bundles/
 
-# Method 2: Wayback Machine JS collection
-# Extract JS files from wayback machine
+# Method 2: Wayback Machine JS collection (historical, no auth needed)
 waybackurls target.com | grep '\.js$' | sort -u > bundles/wayback_js_urls.txt
 cat bundles/wayback_js_urls.txt | httpx -mc 200 -sr -srd bundles/wayback/
 
-# Method 3: Manual extraction from page source
-curl -sk "https://target.com/" | grep -oP 'src="([^"]+\.js)"' | \
+# Method 3: Manual extraction from page source (WITH session cookies)
+curl $CURL_OPTS "https://target.com/" | grep -oP 'src="([^"]+\.js)"' | \
   sed 's/src="//' | sed 's/"$//' | while read js; do
-    url="https://target.com${js}"
-    curl -sk "$url" -o "bundles/$(basename $js)"
+    # Handle relative vs absolute URLs
+    if [[ "$js" == http* ]]; then
+      url="$js"
+    elif [[ "$js" == //* ]]; then
+      url="https:${js}"
+    else
+      url="https://target.com${js}"
+    fi
+    curl $CURL_OPTS "$url" -o "bundles/$(basename $js)"
   done
 
-# Method 4: Extract from all subdomain pages (recursive)
+# Method 4: Extract from all subdomain pages (WITH session cookies)
 cat ../../live_urls.txt | while read url; do
   domain=$(echo "$url" | sed 's|https\?://||')
-  curl -sk "$url" | grep -oP '(?:src|href)="([^"]+\.js)"' | \
+  curl $CURL_OPTS "$url" | grep -oP '(?:src|href)="([^"]+\.js)"' | \
     sed 's/.*="//;s/"$//' | while read js; do
-      full_js="${js}"
-      [[ "$js" != http* ]] && full_js="${url}/${js#/}"
-      curl -sk "$full_js" -o "bundles/${domain}_$(basename $js)" 2>/dev/null
+      if [[ "$js" == http* ]]; then
+        full_js="$js"
+      elif [[ "$js" == //* ]]; then
+        full_js="https:${js}"
+      else
+        full_js="${url}/${js#/}"
+      fi
+      curl $CURL_OPTS "$full_js" -o "bundles/${domain}_$(basename $js)" 2>/dev/null
     done
 done
+
+# Method 5: Caido session replay — for CDN-protected JS behind auth
+# Use Caido MCP to request JS files directly via the active session:
+#   caido_request_get --url "https://cdn6.agoda.net/cdn-bfspa/js/mspa/vendor.js" --session "active"
 
 # Deobfuscate and beautify all downloaded JS
 mkdir -p beautified
@@ -409,10 +443,12 @@ cat output/extended_endpoints.txt | head -200 | httpx \
   -status-code -title -content-length \
   -o output/live_extended_endpoints.txt 2>/dev/null
 
-# 2. Any new JS bundles from hit endpoints?
+# 2. Any new JS bundles from hit endpoints? (WITH session cookies if available)
 grep "200" output/live_extended_endpoints.txt | awk '{print $1}' | while read url; do
   # Check if this HTML page loads new JS files
-  curl -sk "$url" | grep -oP 'src="([^"]+\.js)"' | sed 's/src="//;s/"$//' | \
+  CURL_OPTS="-sk"
+  [ -f "./session_cookies.txt" ] && CURL_OPTS="-sk --cookie ./session_cookies.txt"
+  curl $CURL_OPTS "$url" | grep -oP 'src="([^"]+\.js)"' | sed 's/src="//;s/"$//' | \
     while read js; do
       echo "$js" >> output/new_js_discovered.txt
     done
@@ -527,9 +563,11 @@ echo "[Iteration ${ITER}] Extended to $(wc -l < output/extended.txt) endpoint ca
 cat output/extended.txt | head -300 | httpx -mc 200,401 -o output/live_iter2.txt 2>/dev/null
 echo "  Live from iteration 2: $(wc -l < output/live_iter2.txt)"
 
-# Check for MORE new JS
+# Check for MORE new JS (WITH session cookies if available)
 grep "200" output/live_iter2.txt | awk '{print $1}' | while read url; do
-  curl -sk "$url" | grep -oP 'src="([^"]+\.js)"' | sed 's/src="//;s/"$//' >> output/new_js_iter2.txt
+  CURL_OPTS="-sk"
+  [ -f "./session_cookies.txt" ] && CURL_OPTS="-sk --cookie ./session_cookies.txt"
+  curl $CURL_OPTS "$url" | grep -oP 'src="([^"]+\.js)"' | sed 's/src="//;s/"$//' >> output/new_js_iter2.txt
 done
 
 NEW=$(wc -l < output/new_js_iter2.txt 2>/dev/null)
@@ -991,15 +1029,49 @@ find _next/static/chunks/pages/ -name "*.js" | sed 's/.*pages\///; s/\.js$//; s/
 
 ### Lazy Chunk Downloading
 ```bash
+# ⚠️ CDN JS files often require browser session cookies (Akamai, Cloudflare, etc.)
+# Always set up session cookies before downloading:
+
+# Option A: curl with cookie file
+CURL_OPTS="-sk --cookie ./session_cookies.txt"
+# Option B: wget with cookie file
+WGET_OPTS="--load-cookies ./session_cookies.txt -q"
+
 # Extract all chunk URLs from vendor JS
 grep -oP '["'"'"']https?://[^"'"'"']+\.chunk\.js[^"'"'"']*["'"'"']' vendor.js | sort -u
 
 # Extract webpack chunk path prefixes
 grep -oP '\.p\s*\+\s*["'"'"'][^"'"'"']*\.js["'"'"']' vendor.js | head -5
 
-# Download ALL chunks
+# Download ALL chunks (WITH session cookies)
 for url in $(grep -oP 'https?://[^"'"'"']+\.js(\?[^"'"'"']*)?["'"'"']' all_bundles.js | tr -d '"' | sort -u); do
-    wget "$url" -P chunks/
+    wget $WGET_OPTS "$url" -P chunks/ 2>/dev/null || curl $CURL_OPTS "$url" -o "chunks/$(basename $url)"
 done
+```
+
+### Session Cookie Extraction
+```bash
+# === How to get session cookies for curl/wget ===
+
+# From Caido: Export the full Cookie header from an intercepted request
+# From Browser DevTools → Network → Copy as cURL → extract Cookie:
+
+# Method 1: Save raw Cookie header value
+echo "sessionid=abc123; access_token=xyz789; csrftoken=def456" > session_cookies.txt
+
+# Method 2: Netscape cookie file format (for wget --load-cookies):
+# domain  include_subdomains  path  secure  expiry  name  value
+echo -e ".target.com\tTRUE\t/\tTRUE\t1893456000\tsessionid\tabc123" > cookies_netscape.txt
+
+# Method 3: Caido MCP — use send_request with session cookies automatically
+# The Caido MCP tools use the cookie jar from the active proxy session.
+# For Caido: caido_request_get --url "https://cdn.target.com/bundle.js"
+
+# Method 4: Chrome headless with cookies
+# google-chrome --headless --dump-dom --cookie="sessionid=abc123" \
+#   "https://cdn.target.com/bundle.js" > bundle.js
+
+# Method 5: Verify cookie works
+curl -sk --cookie ./session_cookies.txt "https://cdn.target.com/bundle.js" -o /dev/null -w "HTTP:%{http_code} Size:%{size_download}\n"
 ```
 
