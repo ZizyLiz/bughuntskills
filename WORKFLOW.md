@@ -9,10 +9,25 @@ when each skill fires and how they chain together in a complete bug bounty workf
 ## The Standard Pipeline
 
 ```
-Methodology → Reconnaissance → Vulnerability Assessment → Exploitation → Reporting
-     ↑              ↑                  ↑                       ↑              ↑
-  Mindset &     Discover           Identify               Prove impact    Document
-  validation    attack surface     vuln class             with PoC        for bounty
+Prepare Dir Structure → Reconnaissance → [JS Analysis] → XSS/SQLi/API/VA → Exploitation → Reporting
+         ↑                    ↑                ↑                    ↑              ↑            ↑
+  Create bounty/       Discover         Extract JS         Identify vuln     Prove impact  Document
+  directory tree      attack surface    endpoints/keys      classes w/ PoC                for bounty
+```
+
+### Step 0: Initialize Directory Structure
+
+Run before any recon/analysis. Creates the project workspace for the target program.
+
+```bash
+export PROGRAM="target_program"
+mkdir -p ./bounty/${PROGRAM}/{recon,js_analysis,xss,sqli,api,assessment,exploitation,reporting,ssrf,xxe}
+echo "Created bounty workspace for ${PROGRAM}"
+```
+
+Each phase writes its output to its respective subdirectory under `./bounty/${PROGRAM}/`.
+
+### Step 1: bug-bounty-reconnaissance
 
 Each phase NOW produces its own deliverable report file:
   Recon → RECON_REPORT.md (attack surface inventory)
@@ -44,6 +59,7 @@ Each skill's SKILL.md contains a **MCP Integration** section with tool→task ma
 | **When it fires** | Session start, target switch, feeling lost, before writing any report, or when validating findings |
 | **Trigger keywords** | methodology, mindset, validate, triage, 7-question, discipline, false positive, cvss, severity, never submit, always rejected, evidence hygiene, kill fast, retract, pre-severity |
 | **What it produces** | Engagement type confirmation, 7-Question Gate validation, CVSS scores, conditionally-valid chain table, never-submit list checks, evidence hygiene redactions |
+| **First action** | **Run Step 0: Initialize `./bounty/{program}/` directory structure** before any recon. See pipeline below. |
 | **Next step** | Routes to recon, assessment, exploitation, or reporting based on phase |
 
 **Use when**:
@@ -282,6 +298,7 @@ User: "solve this PortSwigger lab using bughuntskills"
 ```
 "What skill should I use for..."
 
+Starting a new target program?  → Step 0: Initialize directory structure first
 Finding subdomains?              → bug-bounty-reconnaissance
 Testing for vulnerabilities?     → bug-bounty-vulnerability-assessment
 Extracting data / proving impact? → bug-bounty-exploitation
